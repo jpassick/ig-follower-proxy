@@ -7,12 +7,13 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9f9f7; color: #1a1a1a; padding: 2rem; }
-  .container { max-width: 720px; margin: 0 auto; }
+  .container { max-width: 760px; margin: 0 auto; }
   h1 { font-size: 20px; font-weight: 600; margin-bottom: 0.25rem; }
   .subtitle { font-size: 13px; color: #888; margin-bottom: 1.5rem; }
   .tabs { display: flex; gap: 6px; margin-bottom: 1.5rem; }
   .tab { font-size: 13px; padding: 6px 16px; border-radius: 20px; cursor: pointer; border: 1px solid #ddd; background: transparent; color: #666; }
   .tab.active { background: #fff; color: #1a1a1a; border-color: #999; font-weight: 500; }
+  .top-actions { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
   .add-row { display: flex; gap: 8px; margin-bottom: 1rem; }
   .add-row input { flex: 1; font-size: 14px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
   button { font-size: 13px; padding: 8px 16px; border-radius: 8px; border: 1px solid #ddd; background: #fff; cursor: pointer; color: #1a1a1a; }
@@ -21,8 +22,10 @@
   button.primary:hover { background: #333; }
   button.danger { color: #c0392b; border-color: #f0c0bb; font-size: 12px; padding: 4px 8px; }
   button.danger:hover { background: #fdf0ee; }
+  button.secondary { font-size: 13px; padding: 6px 14px; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th { text-align: left; font-size: 12px; color: #888; font-weight: 500; border-bottom: 1px solid #eee; padding: 6px 0; }
+  th { text-align: left; font-size: 12px; color: #888; font-weight: 500; border-bottom: 1px solid #eee; padding: 6px 0; cursor: pointer; user-select: none; }
+  th:hover { color: #1a1a1a; }
   td { padding: 10px 0; border-bottom: 1px solid #eee; vertical-align: middle; }
   tr:last-child td { border-bottom: none; }
   .up { color: #27ae60; font-size: 12px; }
@@ -39,17 +42,44 @@
   .err-box { background: #fdf0ee; border: 1px solid #f0c0bb; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #c0392b; margin-bottom: 10px; display: none; }
   .section-title { font-size: 14px; font-weight: 500; margin-bottom: 10px; }
   .saving { font-size: 12px; color: #888; display: none; }
+  a.handle-link { color: #1a1a1a; text-decoration: none; }
+  a.handle-link:hover { text-decoration: underline; }
+  .password-gate { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f9f9f7; display: flex; align-items: center; justify-content: center; z-index: 999; }
+  .password-box { background: #fff; border: 1px solid #eee; border-radius: 16px; padding: 2rem; width: 320px; text-align: center; }
+  .password-box h2 { font-size: 18px; font-weight: 600; margin-bottom: 0.5rem; }
+  .password-box p { font-size: 13px; color: #888; margin-bottom: 1.25rem; }
+  .password-box input { width: 100%; font-size: 14px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 0.75rem; }
+  .password-box .err { font-size: 12px; color: #c0392b; margin-top: 0.5rem; display: none; }
+  .sort-arrow { font-size: 10px; margin-left: 4px; }
 </style>
 </head>
 <body>
-<div class="container">
+
+<div class="password-gate" id="password-gate">
+  <div class="password-box">
+    <h2>IG Follower Tracker</h2>
+    <p>Alamo Records — enter password to continue</p>
+    <input type="password" id="pw-input" placeholder="Password" />
+    <button class="primary" onclick="checkPassword()" style="width:100%">Enter</button>
+    <div class="err" id="pw-err">Incorrect password</div>
+  </div>
+</div>
+
+<div class="container" id="main-app" style="display:none;">
   <h1>Instagram Follower Tracker</h1>
   <p class="subtitle">Alamo Records roster</p>
   <div class="tabs">
     <button class="tab active" onclick="switchTab('live')">Live lookup</button>
     <button class="tab" onclick="switchTab('report')">Weekly report</button>
   </div>
+
   <div id="view-live">
+    <div class="top-actions">
+      <button class="secondary" onclick="refreshAll()">↻ Refresh all</button>
+      <button class="primary" onclick="saveSnapshot()">Save weekly snapshot</button>
+      <button class="secondary" onclick="downloadCSV()">↓ Download CSV</button>
+      <span class="saving" id="saving-indicator">Saving...</span>
+    </div>
     <div class="section-title">Artist roster</div>
     <div class="add-row">
       <input type="text" id="add-input" placeholder="Instagram handle, e.g. rodwave" />
@@ -57,15 +87,19 @@
     </div>
     <div class="err-box" id="err-box"></div>
     <table>
-      <thead><tr><th style="width:35%">Handle</th><th style="width:30%">Followers</th><th style="width:25%">vs last week</th><th style="width:10%"></th></tr></thead>
+      <thead>
+        <tr>
+          <th style="width:30%" onclick="sortBy('handle')">Handle <span class="sort-arrow" id="sort-handle"></span></th>
+          <th style="width:22%" onclick="sortBy('followers')">Followers <span class="sort-arrow" id="sort-followers">▼</span></th>
+          <th style="width:20%">Follower Growth</th>
+          <th style="width:18%">Follower Growth %</th>
+          <th style="width:10%"></th>
+        </tr>
+      </thead>
       <tbody id="roster-body"></tbody>
     </table>
-    <div class="actions">
-      <button onclick="refreshAll()">Refresh all</button>
-      <button class="primary" onclick="saveSnapshot()">Save weekly snapshot</button>
-      <span class="saving" id="saving-indicator">Saving...</span>
-    </div>
   </div>
+
   <div id="view-report" style="display:none;">
     <div class="report-box">
       <div class="report-header">
@@ -79,10 +113,33 @@
     </div>
   </div>
 </div>
+
 <script>
+const PASSWORD = 'AlamoRec0rds$';
 const SNAP_KEY = 'ig_snaps_v1';
 let roster = [];
 let snapshots = JSON.parse(localStorage.getItem(SNAP_KEY) || '[]');
+let currentSort = { field: 'followers', dir: 'desc' };
+
+function checkPassword() {
+  const val = document.getElementById('pw-input').value;
+  if (val === PASSWORD) {
+    sessionStorage.setItem('ig_auth', '1');
+    document.getElementById('password-gate').style.display = 'none';
+    document.getElementById('main-app').style.display = 'block';
+    loadRoster();
+  } else {
+    document.getElementById('pw-err').style.display = 'block';
+  }
+}
+
+document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') checkPassword(); });
+
+if (sessionStorage.getItem('ig_auth') === '1') {
+  document.getElementById('password-gate').style.display = 'none';
+  document.getElementById('main-app').style.display = 'block';
+}
+
 function saveSnaps() { localStorage.setItem(SNAP_KEY, JSON.stringify(snapshots)); }
 
 async function loadRoster() {
@@ -121,6 +178,12 @@ function renderPct(p) {
   const arrow = p > 0 ? '▲' : p < 0 ? '▼' : '–';
   return `<span class="${cls}">${arrow} ${sign}${p.toFixed(2)}%</span>`;
 }
+function renderGrowth(diff) {
+  if (diff === null) return '<span class="muted">—</span>';
+  const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : 'muted';
+  const sign = diff > 0 ? '+' : '';
+  return `<span class="${cls}">${sign}${Number(diff).toLocaleString()}</span>`;
+}
 function getLastSnap(handle) {
   for (let i = snapshots.length - 1; i >= 0; i--) {
     const e = snapshots[i].data.find(d => d.handle === handle);
@@ -128,18 +191,58 @@ function getLastSnap(handle) {
   }
   return null;
 }
+
+function sortBy(field) {
+  if (currentSort.field === field) {
+    currentSort.dir = currentSort.dir === 'desc' ? 'asc' : 'desc';
+  } else {
+    currentSort.field = field;
+    currentSort.dir = field === 'followers' ? 'desc' : 'asc';
+  }
+  document.getElementById('sort-handle').textContent = '';
+  document.getElementById('sort-followers').textContent = '';
+  const arrow = currentSort.dir === 'desc' ? '▼' : '▲';
+  document.getElementById('sort-' + field).textContent = arrow;
+  renderRoster();
+}
+
+function getSortedRoster() {
+  return [...roster].map((r, i) => ({ ...r, _origIndex: i })).sort((a, b) => {
+    let av, bv;
+    if (currentSort.field === 'followers') {
+      av = a.followers || 0; bv = b.followers || 0;
+    } else {
+      av = a.handle || ''; bv = b.handle || '';
+    }
+    if (av < bv) return currentSort.dir === 'asc' ? -1 : 1;
+    if (av > bv) return currentSort.dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+}
+
 function renderRoster() {
   const tbody = document.getElementById('roster-body');
-  if (!roster.length) { tbody.innerHTML = '<tr><td colspan="4" class="muted" style="padding:12px 0;font-size:13px;">No handles added yet</td></tr>'; return; }
-  tbody.innerHTML = roster.map((r, i) => {
+  if (!roster.length) { tbody.innerHTML = '<tr><td colspan="5" class="muted" style="padding:12px 0;font-size:13px;">No handles added yet</td></tr>'; return; }
+  const sorted = getSortedRoster();
+  tbody.innerHTML = sorted.map(r => {
+    const i = r._origIndex;
     const prev = getLastSnap(r.handle);
     const p = (r.followers != null && prev != null) ? pct(r.followers, prev) : null;
+    const diff = (r.followers != null && prev != null) ? r.followers - prev : null;
     const fc = r.status === 'loading' ? '<span class="muted">fetching...</span>'
       : r.status === 'error' ? '<span class="pill-err">error</span>'
       : `<strong>${fmt(r.followers)}</strong>`;
-    return `<tr><td>@${r.handle}</td><td>${fc}</td><td>${r.status === 'ok' ? renderPct(p) : '<span class="muted">—</span>'}</td><td style="text-align:right"><button class="danger" onclick="removeHandle(${i})">✕</button></td></tr>`;
+    const igUrl = `https://www.instagram.com/${r.handle}/`;
+    return `<tr>
+      <td><a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></td>
+      <td>${fc}</td>
+      <td>${r.status === 'ok' ? renderGrowth(diff) : '<span class="muted">—</span>'}</td>
+      <td>${r.status === 'ok' ? renderPct(p) : '<span class="muted">—</span>'}</td>
+      <td style="text-align:right"><button class="danger" onclick="removeHandle(${i})">✕</button></td>
+    </tr>`;
   }).join('');
 }
+
 async function fetchFollowers(handle) {
   const res = await fetch(`/api/followers?username=${encodeURIComponent(handle)}`);
   if (!res.ok) throw new Error(`Server error ${res.status}`);
@@ -148,11 +251,13 @@ async function fetchFollowers(handle) {
   if (data.follower_count == null) throw new Error('No count returned');
   return data.follower_count;
 }
+
 function showErr(msg) {
   const el = document.getElementById('err-box');
   el.textContent = msg; el.style.display = 'block';
   setTimeout(() => { el.style.display = 'none'; }, 7000);
 }
+
 async function addHandle() {
   const input = document.getElementById('add-input');
   const handle = input.value.trim().replace('@','').toLowerCase();
@@ -166,10 +271,12 @@ async function addHandle() {
   renderRoster();
   await persistRoster();
 }
+
 async function removeHandle(i) {
   roster.splice(i, 1); renderRoster();
   await persistRoster();
 }
+
 async function refreshAll() {
   for (const r of roster) {
     r.status = 'loading'; renderRoster();
@@ -179,6 +286,7 @@ async function refreshAll() {
   }
   await persistRoster();
 }
+
 function saveSnapshot() {
   const valid = roster.filter(r => r.followers != null);
   if (!valid.length) { showErr('No data yet.'); return; }
@@ -186,6 +294,25 @@ function saveSnapshot() {
   snapshots.push(snap); saveSnaps(); renderReport();
   alert('Snapshot saved — ' + snap.date);
 }
+
+function downloadCSV() {
+  const sorted = getSortedRoster();
+  let csv = 'Handle,Followers,Follower Growth,Follower Growth %\n';
+  sorted.forEach(r => {
+    const prev = getLastSnap(r.handle);
+    const diff = (r.followers != null && prev != null) ? r.followers - prev : null;
+    const p = (r.followers != null && prev != null) ? pct(r.followers, prev) : null;
+    const growth = diff !== null ? (diff >= 0 ? '+' : '') + diff : '';
+    const growthPct = p !== null ? (p >= 0 ? '+' : '') + p.toFixed(2) + '%' : '';
+    csv += `@${r.handle},${r.followers != null ? r.followers : ''},${growth},${growthPct}\n`;
+  });
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'ig-follower-report.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
 function renderReport() {
   const el = document.getElementById('report-rows');
   const dateEl = document.getElementById('report-date');
@@ -193,19 +320,25 @@ function renderReport() {
   const latest = snapshots[snapshots.length - 1];
   const prev = snapshots.length > 1 ? snapshots[snapshots.length - 2] : null;
   dateEl.textContent = latest.date;
-  el.innerHTML = latest.data.map(d => {
+  const sorted = [...latest.data].sort((a, b) => b.followers - a.followers);
+  el.innerHTML = sorted.map(d => {
     const pe = prev ? prev.data.find(p => p.handle === d.handle) : null;
     const p = pe ? pct(d.followers, pe.followers) : null;
     const diff = pe ? d.followers - pe.followers : null;
-    return `<div class="report-row"><span style="min-width:130px">@${d.handle}</span><strong style="min-width:90px">${fmt(d.followers)}</strong><span>${diff !== null ? `${renderPct(p)} <span class="muted">(${diff >= 0 ? '+' : ''}${Number(diff).toLocaleString()})</span>` : '<span class="muted">first entry</span>'}</span></div>`;
+    return `<div class="report-row">
+      <span style="min-width:130px"><a class="handle-link" href="https://www.instagram.com/${d.handle}/" target="_blank">@${d.handle}</a></span>
+      <strong style="min-width:90px">${fmt(d.followers)}</strong>
+      <span>${diff !== null ? `${renderGrowth(diff)} ${renderPct(p)}` : '<span class="muted">first entry</span>'}</span>
+    </div>`;
   }).join('');
 }
+
 function exportReport() {
   if (!snapshots.length) { alert('No snapshot data yet.'); return; }
   const latest = snapshots[snapshots.length - 1];
   const prev = snapshots.length > 1 ? snapshots[snapshots.length - 2] : null;
   let txt = `Instagram Weekly Report — ${latest.date}\n${'─'.repeat(44)}\n`;
-  latest.data.forEach(d => {
+  [...latest.data].sort((a,b) => b.followers - a.followers).forEach(d => {
     const pe = prev ? prev.data.find(p => p.handle === d.handle) : null;
     const p = pe ? pct(d.followers, pe.followers) : null;
     const diff = pe ? d.followers - pe.followers : null;
@@ -214,14 +347,17 @@ function exportReport() {
   });
   navigator.clipboard.writeText(txt).then(() => alert('Copied!')).catch(() => alert(txt));
 }
+
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach((el, i) => el.classList.toggle('active', ['live','report'][i] === tab));
   document.getElementById('view-live').style.display = tab === 'live' ? '' : 'none';
   document.getElementById('view-report').style.display = tab === 'report' ? '' : 'none';
   if (tab === 'report') renderReport();
 }
+
 document.getElementById('add-input').addEventListener('keydown', e => { if (e.key === 'Enter') addHandle(); });
-loadRoster();
+
+if (sessionStorage.getItem('ig_auth') === '1') loadRoster();
 </script>
 </body>
 </html>
