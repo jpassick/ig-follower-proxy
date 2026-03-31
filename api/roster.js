@@ -19,15 +19,19 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const body = req.body;
-    const roster = Array.isArray(body.roster) ? body.roster : [];
+    let body = req.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch(e) { body = {}; }
+    }
+    const roster = Array.isArray(body?.roster) ? body.roster : [];
+    const clean = roster.filter(r => r && typeof r.handle === 'string' && r.handle.length > 0);
     const r = await fetch(`${url}/set/roster`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify([JSON.stringify(roster)])
+      body: JSON.stringify([JSON.stringify(clean)])
     });
     const result = await r.json();
-    return res.status(200).json({ ok: true, result });
+    return res.status(200).json({ ok: true, saved: clean.length });
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
