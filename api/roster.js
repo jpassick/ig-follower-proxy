@@ -16,10 +16,16 @@ export default async function handler(req, res) {
     const data = await r.json();
     let roster = [];
     if (data.result) {
-      let parsed = data.result;
-      if (typeof parsed === 'string') parsed = JSON.parse(parsed);
-      if (typeof parsed === 'string') parsed = JSON.parse(parsed);
-      if (Array.isArray(parsed)) roster = parsed;
+      let val = data.result;
+      // unwrap as many times as needed
+      while (typeof val === 'string') {
+        try { val = JSON.parse(val); } catch(e) { break; }
+      }
+      // if it's an array with one string element, unwrap that too
+      if (Array.isArray(val) && val.length === 1 && typeof val[0] === 'string') {
+        try { val = JSON.parse(val[0]); } catch(e) {}
+      }
+      if (Array.isArray(val)) roster = val;
     }
     roster = roster.filter(r => r && typeof r.handle === 'string' && r.handle.length > 0);
     return res.status(200).json({ roster });
@@ -32,7 +38,7 @@ export default async function handler(req, res) {
     }
     const roster = Array.isArray(body?.roster) ? body.roster : [];
     const clean = roster.filter(r => r && typeof r.handle === 'string' && r.handle.length > 0);
-    const r = await fetch(`${url}/set/roster`, {
+    await fetch(`${url}/set/roster`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify([JSON.stringify(clean)])
