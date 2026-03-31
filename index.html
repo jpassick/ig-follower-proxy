@@ -72,7 +72,6 @@
     <button class="tab active" onclick="switchTab('live')">Live lookup</button>
     <button class="tab" onclick="switchTab('report')">Weekly report</button>
   </div>
-
   <div id="view-live">
     <div class="top-actions">
       <button class="secondary" onclick="refreshAll()">↻ Refresh all</button>
@@ -99,7 +98,6 @@
       <tbody id="roster-body"></tbody>
     </table>
   </div>
-
   <div id="view-report" style="display:none;">
     <div class="report-box">
       <div class="report-header">
@@ -118,7 +116,7 @@
 const PASSWORD = 'AlamoRec0rds$';
 const SNAP_KEY = 'ig_snaps_v1';
 let roster = [];
-let snapshots = JSON.parse(localStorage.getItem(SNAP_KEY) || '[]');
+let snapshots = [];
 let currentSort = { field: 'followers', dir: 'desc' };
 
 function checkPassword() {
@@ -127,7 +125,7 @@ function checkPassword() {
     sessionStorage.setItem('ig_auth', '1');
     document.getElementById('password-gate').style.display = 'none';
     document.getElementById('main-app').style.display = 'block';
-    loadRoster();
+    loadAll();
   } else {
     document.getElementById('pw-err').style.display = 'block';
   }
@@ -140,7 +138,9 @@ if (sessionStorage.getItem('ig_auth') === '1') {
   document.getElementById('main-app').style.display = 'block';
 }
 
-function saveSnaps() { localStorage.setItem(SNAP_KEY, JSON.stringify(snapshots)); }
+async function loadAll() {
+  await Promise.all([loadRoster(), loadSnapshots()]);
+}
 
 async function loadRoster() {
   try {
@@ -149,6 +149,15 @@ async function loadRoster() {
     roster = data.roster || [];
     renderRoster();
   } catch(e) { roster = []; renderRoster(); }
+}
+
+async function loadSnapshots() {
+  try {
+    const res = await fetch('/api/snapshots');
+    const data = await res.json();
+    snapshots = data.snapshots || [];
+    renderReport();
+  } catch(e) { snapshots = []; }
 }
 
 async function persistRoster() {
@@ -162,6 +171,16 @@ async function persistRoster() {
     });
   } catch(e) { console.error('Save failed', e); }
   indicator.style.display = 'none';
+}
+
+async function persistSnapshots() {
+  try {
+    await fetch('/api/snapshots', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ snapshots })
+    });
+  } catch(e) { console.error('Snapshot save failed', e); }
 }
 
 function fmt(n) {
@@ -287,11 +306,13 @@ async function refreshAll() {
   await persistRoster();
 }
 
-function saveSnapshot() {
+async function saveSnapshot() {
   const valid = roster.filter(r => r.followers != null);
   if (!valid.length) { showErr('No data yet.'); return; }
   const snap = { date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), ts: Date.now(), data: valid.map(r => ({ handle: r.handle, followers: r.followers })) };
-  snapshots.push(snap); saveSnaps(); renderReport();
+  snapshots.push(snap);
+  await persistSnapshots();
+  renderReport();
   alert('Snapshot saved — ' + snap.date);
 }
 
@@ -357,7 +378,7 @@ function switchTab(tab) {
 
 document.getElementById('add-input').addEventListener('keydown', e => { if (e.key === 'Enter') addHandle(); });
 
-if (sessionStorage.getItem('ig_auth') === '1') loadRoster();
+if (sessionStorage.getItem('ig_auth') === '1') loadAll();
 </script>
 </body>
 </html>
