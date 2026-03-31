@@ -159,12 +159,13 @@ async function addHandle() {
   if (!handle) return;
   if (roster.find(r => r.handle === handle)) { showErr('@' + handle + ' already in roster.'); return; }
   input.value = '';
-  const entry = { handle, followers: null, status: 'loading' };
+  const entry = { handle: handle, followers: null, status: 'loading' };
   roster.push(entry); renderRoster();
   try { entry.followers = await fetchFollowers(handle); entry.status = 'ok'; }
   catch(e) { entry.status = 'error'; showErr('Error on @' + handle + ': ' + e.message); }
   renderRoster();
   await persistRoster();
+}
 }
 async function removeHandle(i) {
   roster.splice(i, 1); renderRoster();
