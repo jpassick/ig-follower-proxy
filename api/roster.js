@@ -14,7 +14,14 @@ export default async function handler(req, res) {
       headers: { Authorization: `Bearer ${token}` }
     });
     const data = await r.json();
-    const roster = data.result ? JSON.parse(data.result) : [];
+    let roster = [];
+    if (data.result) {
+      let parsed = data.result;
+      if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+      if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+      if (Array.isArray(parsed)) roster = parsed;
+    }
+    roster = roster.filter(r => r && typeof r.handle === 'string' && r.handle.length > 0);
     return res.status(200).json({ roster });
   }
 
@@ -30,7 +37,6 @@ export default async function handler(req, res) {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify([JSON.stringify(clean)])
     });
-    const result = await r.json();
     return res.status(200).json({ ok: true, saved: clean.length });
   }
 
