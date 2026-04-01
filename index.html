@@ -34,7 +34,7 @@
   .muted { color: #aaa; }
   .pill-err { background: #fdf0ee; color: #c0392b; font-size: 11px; padding: 2px 8px; border-radius: 20px; }
   .actions { display: flex; gap: 8px; margin-top: 1.25rem; flex-wrap: wrap; align-items: center; }
-  .report-box { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 1.25rem; }
+  .report-box { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
   .report-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
   .report-title { font-size: 14px; font-weight: 600; }
   .report-date { font-size: 12px; color: #888; }
@@ -51,7 +51,15 @@
   .password-box p { font-size: 13px; color: #888; margin-bottom: 1.25rem; }
   .password-box input { width: 100%; font-size: 14px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 0.75rem; }
   .password-box .err { font-size: 12px; color: #c0392b; margin-top: 0.5rem; display: none; }
-  .sort-arrow { font-size: 10px; margin-left: 4px; }
+  .sort-arrow { font-size: 10px; margin-left: 4px; color: #bbb; }
+  .sort-arrow.active { color: #1a1a1a; }
+  .highlights-box { background: #f0f7ff; border: 1px solid #c8e0f8; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+  .highlights-title { font-size: 13px; font-weight: 600; color: #1a5fa8; margin-bottom: 10px; }
+  .highlights-content { font-size: 13px; color: #1a1a1a; line-height: 1.7; }
+  .highlights-content ul { padding-left: 1.25rem; }
+  .highlights-content li { margin-bottom: 4px; }
+  .highlights-loading { font-size: 13px; color: #888; }
+  .view-badge { font-size: 11px; background: #f0f0f0; color: #888; border-radius: 20px; padding: 2px 10px; margin-left: 8px; }
 </style>
 </head>
 <body>
@@ -67,22 +75,27 @@
 </div>
 
 <div class="container" id="main-app" style="display:none;">
-  <h1>Instagram Follower Tracker</h1>
+  <h1>Instagram Follower Tracker <span class="view-badge" id="view-badge" style="display:none;">View only</span></h1>
   <p class="subtitle">Alamo Records roster</p>
   <p class="refresh-note">** Refreshes every Monday and Friday at 10:00 AM EST</p>
   <div class="tabs">
     <button class="tab active" onclick="switchTab('live')">Live lookup</button>
     <button class="tab" onclick="switchTab('report')">Weekly report</button>
   </div>
+
   <div id="view-live">
-    <div class="top-actions">
+    <div class="top-actions" id="admin-actions">
       <button class="secondary" onclick="refreshAll()">↻ Refresh all</button>
       <button class="primary" onclick="saveSnapshot()">Save weekly snapshot</button>
       <button class="secondary" onclick="downloadCSV()">↓ Download CSV</button>
+      <button class="secondary" onclick="sendEmailNow()">✉ Send email update</button>
       <span class="saving" id="saving-indicator">Saving...</span>
     </div>
+    <div class="top-actions" id="viewer-actions" style="display:none;">
+      <button class="secondary" onclick="downloadCSV()">↓ Download CSV</button>
+    </div>
     <div class="section-title">Artist roster</div>
-    <div class="add-row">
+    <div class="add-row" id="add-row-el">
       <input type="text" id="add-input" placeholder="Instagram handle, e.g. rodwave" />
       <button class="primary" onclick="addHandle()">Add + fetch</button>
     </div>
@@ -90,17 +103,22 @@
     <table>
       <thead>
         <tr>
-          <th style="width:28%" onclick="sortBy('handle')">Handle <span class="sort-arrow" id="sort-handle"></span></th>
-          <th style="width:20%" onclick="sortBy('followers')">Followers <span class="sort-arrow" id="sort-followers">▼</span></th>
-          <th style="width:18%" onclick="sortBy('growth')">Follower Growth <span class="sort-arrow" id="sort-growth"></span></th>
-          <th style="width:18%" onclick="sortBy('pct')">Follower Growth % <span class="sort-arrow" id="sort-pct"></span></th>
+          <th style="width:28%" onclick="sortBy('handle')">Handle <span class="sort-arrow" id="sort-handle">↕</span></th>
+          <th style="width:20%" onclick="sortBy('followers')">Followers <span class="sort-arrow active" id="sort-followers">▼</span></th>
+          <th style="width:18%" onclick="sortBy('growth')">Follower Growth <span class="sort-arrow" id="sort-growth">↕</span></th>
+          <th style="width:18%" onclick="sortBy('pct')">Follower Growth % <span class="sort-arrow" id="sort-pct">↕</span></th>
           <th style="width:16%"></th>
         </tr>
       </thead>
       <tbody id="roster-body"></tbody>
     </table>
   </div>
+
   <div id="view-report" style="display:none;">
+    <div class="highlights-box" id="highlights-box" style="display:none;">
+      <div class="highlights-title">Weekly Highlights</div>
+      <div class="highlights-content" id="highlights-content"><span class="highlights-loading">Generating highlights...</span></div>
+    </div>
     <div class="report-box">
       <div class="report-header">
         <div class="report-title">Weekly follower report</div>
@@ -115,33 +133,47 @@
 </div>
 
 <script>
-const PASSWORD = 'AlamoRec0rds$';
+const ADMIN_PASSWORD = 'AlamoRec0rds$';
+const VIEW_PASSWORD = '25Madison';
 let roster = [];
 let snapshots = [];
 let currentSort = { field: 'followers', dir: 'desc' };
+let isAdmin = false;
 
 function checkPassword() {
   const val = document.getElementById('pw-input').value;
-  if (val === PASSWORD) {
-    sessionStorage.setItem('ig_auth', '1');
-    document.getElementById('password-gate').style.display = 'none';
-    document.getElementById('main-app').style.display = 'block';
-    loadAll();
+  if (val === ADMIN_PASSWORD) {
+    sessionStorage.setItem('ig_auth', 'admin');
+    isAdmin = true;
+    showApp();
+  } else if (val === VIEW_PASSWORD) {
+    sessionStorage.setItem('ig_auth', 'viewer');
+    isAdmin = false;
+    showApp();
   } else {
     document.getElementById('pw-err').style.display = 'block';
   }
 }
 
-document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') checkPassword(); });
-
-if (sessionStorage.getItem('ig_auth') === '1') {
+function showApp() {
   document.getElementById('password-gate').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
+  if (!isAdmin) {
+    document.getElementById('admin-actions').style.display = 'none';
+    document.getElementById('viewer-actions').style.display = 'flex';
+    document.getElementById('add-row-el').style.display = 'none';
+    document.getElementById('view-badge').style.display = 'inline';
+  }
+  loadAll();
 }
 
-async function loadAll() {
-  await Promise.all([loadRoster(), loadSnapshots()]);
-}
+document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') checkPassword(); });
+
+const savedAuth = sessionStorage.getItem('ig_auth');
+if (savedAuth === 'admin') { isAdmin = true; showApp(); }
+else if (savedAuth === 'viewer') { isAdmin = false; showApp(); }
+
+async function loadAll() { await Promise.all([loadRoster(), loadSnapshots()]); }
 
 async function loadRoster() {
   try {
@@ -157,7 +189,6 @@ async function loadSnapshots() {
     const res = await fetch('/api/snapshots');
     const data = await res.json();
     snapshots = data.snapshots || [];
-    renderReport();
   } catch(e) { snapshots = []; }
 }
 
@@ -165,22 +196,14 @@ async function persistRoster() {
   const indicator = document.getElementById('saving-indicator');
   indicator.style.display = 'inline';
   try {
-    await fetch('/api/roster', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roster })
-    });
+    await fetch('/api/roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roster }) });
   } catch(e) { console.error('Save failed', e); }
   indicator.style.display = 'none';
 }
 
 async function persistSnapshots() {
   try {
-    await fetch('/api/snapshots', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ snapshots })
-    });
+    await fetch('/api/snapshots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ snapshots }) });
   } catch(e) { console.error('Snapshot save failed', e); }
 }
 
@@ -220,10 +243,12 @@ function sortBy(field) {
     currentSort.dir = (field === 'followers' || field === 'growth' || field === 'pct') ? 'desc' : 'asc';
   }
   ['handle','followers','growth','pct'].forEach(f => {
-    document.getElementById('sort-' + f).textContent = '';
+    const el = document.getElementById('sort-' + f);
+    el.textContent = '↕'; el.classList.remove('active');
   });
   const arrow = currentSort.dir === 'desc' ? '▼' : '▲';
-  document.getElementById('sort-' + field).textContent = arrow;
+  const activeEl = document.getElementById('sort-' + field);
+  activeEl.textContent = arrow; activeEl.classList.add('active');
   renderRoster();
 }
 
@@ -247,7 +272,7 @@ function getSortedRoster() {
 
 function renderRoster() {
   const tbody = document.getElementById('roster-body');
-  if (!roster.length) { tbody.innerHTML = '<tr><td colspan="5" class="muted" style="padding:12px 0;font-size:13px;">No handles added yet</td></tr>'; return; }
+  if (!roster.length) { tbody.innerHTML = `<tr><td colspan="${isAdmin ? 5 : 4}" class="muted" style="padding:12px 0;font-size:13px;">No handles added yet</td></tr>`; return; }
   const sorted = getSortedRoster();
   tbody.innerHTML = sorted.map(r => {
     const i = r._origIndex;
@@ -255,12 +280,13 @@ function renderRoster() {
       : r.status === 'error' ? '<span class="pill-err">error</span>'
       : `<strong>${fmt(r.followers)}</strong>`;
     const igUrl = `https://www.instagram.com/${r.handle}/`;
+    const removeBtn = isAdmin ? `<td style="text-align:right"><button class="danger" onclick="removeHandle(${i})">✕</button></td>` : '';
     return `<tr>
       <td><a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></td>
       <td>${fc}</td>
       <td>${r.status === 'ok' ? renderGrowth(r._diff) : '<span class="muted">—</span>'}</td>
       <td>${r.status === 'ok' ? renderPct(r._pct) : '<span class="muted">—</span>'}</td>
-      <td style="text-align:right"><button class="danger" onclick="removeHandle(${i})">✕</button></td>
+      ${removeBtn}
     </tr>`;
   }).join('');
 }
@@ -319,6 +345,20 @@ async function saveSnapshot() {
   alert('Snapshot saved — ' + snap.date);
 }
 
+async function sendEmailNow() {
+  const btn = event.target;
+  btn.textContent = 'Sending...';
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/send-email', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) alert('Email sent successfully!');
+    else alert('Error: ' + (data.error || 'Unknown error'));
+  } catch(e) { alert('Failed to send: ' + e.message); }
+  btn.textContent = '✉ Send email update';
+  btn.disabled = false;
+}
+
 function downloadCSV() {
   const sorted = getSortedRoster();
   let csv = 'Handle,Followers,Follower Growth,Follower Growth %\n';
@@ -334,6 +374,72 @@ function downloadCSV() {
   URL.revokeObjectURL(url);
 }
 
+async function generateHighlights(latest, prev) {
+  const box = document.getElementById('highlights-box');
+  const content = document.getElementById('highlights-content');
+  box.style.display = 'block';
+  content.innerHTML = '<span class="highlights-loading">Generating highlights...</span>';
+
+  if (!prev) {
+    content.innerHTML = '<ul><li>This is the first snapshot — growth data will appear after the next refresh.</li></ul>';
+    return;
+  }
+
+  const changes = latest.data.map(d => {
+    const pe = prev.data.find(p => p.handle === d.handle);
+    const diff = pe ? d.followers - pe.followers : null;
+    const p = pe ? ((d.followers - pe.followers) / pe.followers * 100) : null;
+    return { handle: d.handle, followers: d.followers, diff, pct: p };
+  }).filter(d => d.diff !== null);
+
+  const sorted = [...changes].sort((a, b) => b.diff - a.diff);
+  const biggestGainer = sorted[0];
+  const biggestDrop = sorted[sorted.length - 1];
+  const gainers = changes.filter(c => c.diff > 0).length;
+  const losers = changes.filter(c => c.diff < 0).length;
+  const milestones = changes.filter(c => {
+    const prevFollowers = c.followers - c.diff;
+    const thresholds = [100000, 250000, 500000, 1000000, 2000000, 5000000, 10000000];
+    return thresholds.some(t => prevFollowers < t && c.followers >= t);
+  });
+
+  const prompt = `You are a music industry analyst writing a brief weekly highlights summary for a record label's Instagram follower report. Write 3-5 bullet points in full sentences. Be concise and direct. Use the data below.
+
+Date: ${latest.date}
+Total artists tracked: ${latest.data.length}
+Artists that gained followers: ${gainers}
+Artists that lost followers: ${losers}
+Biggest gainer: @${biggestGainer.handle} (+${biggestGainer.diff.toLocaleString()} followers, +${biggestGainer.pct.toFixed(2)}%)
+Biggest drop: @${biggestDrop.handle} (${biggestDrop.diff.toLocaleString()} followers, ${biggestDrop.pct.toFixed(2)}%)
+${milestones.length > 0 ? 'Milestone crossings: ' + milestones.map(m => '@' + m.handle).join(', ') : 'No milestone crossings this week.'}
+Top 5 by followers: ${sorted.slice(0,5).map(d => '@' + d.handle).join(', ')}
+
+Write bullet points only. No intro. No conclusion. Start each line with a dash.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 500,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    const text = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
+    const lines = text.split('\n').filter(l => l.trim());
+    content.innerHTML = '<ul>' + lines.map(l => `<li>${l.replace(/^[-•]\s*/, '')}</li>`).join('') + '</ul>';
+  } catch(e) {
+    const bullets = [];
+    bullets.push(`${gainers} out of ${latest.data.length} artists gained followers this week, while ${losers} saw a decline.`);
+    if (biggestGainer?.diff > 0) bullets.push(`The biggest gainer was @${biggestGainer.handle}, adding ${biggestGainer.diff.toLocaleString()} followers (+${biggestGainer.pct.toFixed(2)}%).`);
+    if (biggestDrop?.diff < 0) bullets.push(`The biggest drop was @${biggestDrop.handle} with ${Math.abs(biggestDrop.diff).toLocaleString()} followers lost (${biggestDrop.pct.toFixed(2)}%).`);
+    if (milestones.length > 0) bullets.push(`Milestone: ${milestones.map(m => '@' + m.handle).join(', ')} crossed a major follower threshold.`);
+    content.innerHTML = '<ul>' + bullets.map(b => `<li>${b}</li>`).join('') + '</ul>';
+  }
+}
+
 function renderReport() {
   const el = document.getElementById('report-rows');
   const dateEl = document.getElementById('report-date');
@@ -341,6 +447,7 @@ function renderReport() {
   const latest = snapshots[snapshots.length - 1];
   const prev = snapshots.length > 1 ? snapshots[snapshots.length - 2] : null;
   dateEl.textContent = latest.date;
+  generateHighlights(latest, prev);
   const sorted = [...latest.data].sort((a, b) => b.followers - a.followers);
   el.innerHTML = sorted.map(d => {
     const pe = prev ? prev.data.find(p => p.handle === d.handle) : null;
@@ -377,8 +484,6 @@ function switchTab(tab) {
 }
 
 document.getElementById('add-input').addEventListener('keydown', e => { if (e.key === 'Enter') addHandle(); });
-
-if (sessionStorage.getItem('ig_auth') === '1') loadAll();
 </script>
 </body>
 </html>
