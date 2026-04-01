@@ -22,7 +22,7 @@
   .app-logo { height: 28px; opacity: 0.8; }
   h1 { font-size: 18px; font-weight: 600; }
   .subtitle { font-size: 13px; color: #888; margin-bottom: 0.25rem; }
-  .refresh-note { font-size: 12px; color: #bbb; margin-bottom: 1.5rem; }
+  .refresh-note { font-size: 12px; color: #bbb; margin-bottom: 1.5rem; font-style: italic; }
   .view-badge { font-size: 11px; background: #f0f0f0; color: #888; border-radius: 20px; padding: 2px 10px; }
   .tabs { display: flex; gap: 6px; margin-bottom: 1.5rem; }
   .tab { font-size: 13px; padding: 6px 16px; border-radius: 20px; cursor: pointer; border: 1px solid #ddd; background: transparent; color: #666; }
@@ -55,8 +55,8 @@
   .err-box { background: #fdf0ee; border: 1px solid #f0c0bb; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #c0392b; margin-bottom: 10px; display: none; }
   .section-title { font-size: 14px; font-weight: 500; margin-bottom: 10px; }
   .saving { font-size: 12px; color: #888; display: none; }
-  a.handle-link { color: #1a1a1a; text-decoration: none; }
-  a.handle-link:hover { text-decoration: underline; }
+  a.handle-link { color: #1a1a1a; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: #ddd; }
+  a.handle-link:hover { text-decoration-color: #1a1a1a; }
   .sort-arrow { font-size: 10px; margin-left: 4px; color: #bbb; }
   .sort-arrow.active { color: #1a1a1a; }
   .highlights-box { background: #f0f7ff; border: 1px solid #c8e0f8; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
@@ -65,6 +65,7 @@
   .highlights-content ul { padding-left: 1.25rem; }
   .highlights-content li { margin-bottom: 4px; }
   .actions { display: flex; gap: 8px; margin-top: 1.25rem; flex-wrap: wrap; align-items: center; }
+  .rank { font-size: 12px; color: #bbb; font-weight: 500; min-width: 20px; }
 </style>
 </head>
 <body>
@@ -86,7 +87,7 @@
     <h1>Instagram Follower Tracker <span class="view-badge" id="view-badge" style="display:none;">View only</span></h1>
   </div>
   <p class="subtitle">Alamo Records roster</p>
-  <p class="refresh-note">** Refreshes every Monday and Friday at 10:00 AM EST</p>
+  <p class="refresh-note">Refreshes every Monday and Friday at 10:00 AM EST</p>
   <div class="tabs">
     <button class="tab active" onclick="switchTab('live')">Live lookup</button>
     <button class="tab" onclick="switchTab('report')">Weekly report</button>
@@ -94,7 +95,7 @@
   <div id="view-live">
     <div class="top-actions" id="admin-actions">
       <button class="secondary" onclick="refreshAll()">↻ Refresh all</button>
-      <button class="primary" onclick="saveSnapshot()">Save weekly snapshot</button>
+      <button class="primary" onclick="saveSnapshot()">Manual snapshot</button>
       <button class="secondary" onclick="downloadCSV()">↓ Download CSV</button>
       <button class="secondary" onclick="sendEmailNow()">✉ Send email update</button>
       <span class="saving" id="saving-indicator">Saving...</span>
@@ -111,11 +112,12 @@
     <table>
       <thead>
         <tr>
-          <th style="width:26%" onclick="sortBy('handle')">Handle <span class="sort-arrow" id="sort-handle">↕</span></th>
-          <th style="width:18%" onclick="sortBy('followers')">Followers <span class="sort-arrow active" id="sort-followers">▼</span></th>
-          <th style="width:24%" onclick="sortBy('growth')" id="th-growth">Follower Growth <span class="sort-arrow" id="sort-growth">↕</span></th>
-          <th style="width:24%" onclick="sortBy('pct')" id="th-pct">Follower Growth % <span class="sort-arrow" id="sort-pct">↕</span></th>
-          <th style="width:8%"></th>
+          <th style="width:4%">#</th>
+          <th style="width:24%" onclick="sortBy('handle')">Handle <span class="sort-arrow" id="sort-handle">↕</span></th>
+          <th style="width:17%" onclick="sortBy('followers')">Followers <span class="sort-arrow active" id="sort-followers">▼</span></th>
+          <th style="width:22%" onclick="sortBy('growth')" id="th-growth">Follower Growth <span class="sort-arrow" id="sort-growth">↕</span></th>
+          <th style="width:22%" onclick="sortBy('pct')" id="th-pct">Follower Growth % <span class="sort-arrow" id="sort-pct">↕</span></th>
+          <th style="width:11%"></th>
         </tr>
       </thead>
       <tbody id="roster-body"></tbody>
@@ -189,12 +191,20 @@ async function persistSnapshots() {
   try { await fetch('/api/snapshots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snapshots})}); } catch(e) {}
 }
 
+function shortDate(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d)) return dateStr;
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+
 function updateColumnHeaders() {
   if (snapshots.length >= 2) {
     const latest=snapshots[snapshots.length-1], prev=snapshots[snapshots.length-2];
-    const range=`(${prev.date} – ${latest.date})`;
-    document.getElementById('th-growth').innerHTML=`Follower Growth <small style="font-weight:400;color:#bbb;font-size:11px;">${range}</small> <span class="sort-arrow" id="sort-growth">↕</span>`;
-    document.getElementById('th-pct').innerHTML=`Follower Growth % <small style="font-weight:400;color:#bbb;font-size:11px;">${range}</small> <span class="sort-arrow" id="sort-pct">↕</span>`;
+    if (latest.date !== prev.date) {
+      const range=`(${shortDate(prev.date)} – ${shortDate(latest.date)})`;
+      document.getElementById('th-growth').innerHTML=`Follower Growth <small style="font-weight:400;color:#bbb;font-size:11px;">${range}</small> <span class="sort-arrow" id="sort-growth">↕</span>`;
+      document.getElementById('th-pct').innerHTML=`Follower Growth % <small style="font-weight:400;color:#bbb;font-size:11px;">${range}</small> <span class="sort-arrow" id="sort-pct">↕</span>`;
+    }
   }
 }
 
@@ -247,14 +257,21 @@ function getSortedRoster() {
 
 function renderRoster() {
   const tbody=document.getElementById('roster-body');
-  if(!roster.length){tbody.innerHTML=`<tr><td colspan="${isAdmin?5:4}" class="muted" style="padding:12px 0;font-size:13px;">No handles added yet</td></tr>`;return;}
+  if(!roster.length){tbody.innerHTML=`<tr><td colspan="${isAdmin?6:5}" class="muted" style="padding:12px 0;font-size:13px;">No handles added yet</td></tr>`;return;}
   const sorted=getSortedRoster();
-  tbody.innerHTML=sorted.map(r => {
+  tbody.innerHTML=sorted.map((r,rankIdx) => {
     const i=r._origIndex;
     const fc=r.status==='loading'?'<span class="muted">fetching...</span>':r.status==='error'?'<span class="pill-err">error</span>':`<strong>${fmt(r.followers)}</strong>`;
     const igUrl=`https://www.instagram.com/${r.handle}/`;
     const removeBtn=isAdmin?`<td style="text-align:right"><button class="danger" onclick="removeHandle(${i})">✕</button></td>`:'';
-    return `<tr><td><a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></td><td>${fc}</td><td>${r.status==='ok'?renderGrowth(r._diff):'<span class="muted">—</span>'}</td><td>${r.status==='ok'?renderPct(r._pct):'<span class="muted">—</span>'}</td>${removeBtn}</tr>`;
+    return `<tr>
+      <td><span class="rank">${rankIdx+1}</span></td>
+      <td><a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></td>
+      <td>${fc}</td>
+      <td>${r.status==='ok'?renderGrowth(r._diff):'<span class="muted">—</span>'}</td>
+      <td>${r.status==='ok'?renderPct(r._pct):'<span class="muted">—</span>'}</td>
+      ${removeBtn}
+    </tr>`;
   }).join('');
 }
 
@@ -303,8 +320,8 @@ async function sendEmailNow() {
 }
 
 function downloadCSV() {
-  const sorted=getSortedRoster(); let csv='Handle,Followers,Follower Growth,Follower Growth %\n';
-  sorted.forEach(r=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';csv+=`@${r.handle},${r.followers!=null?r.followers:''},${growth},${growthPct}\n`;});
+  const sorted=getSortedRoster(); let csv='Rank,Handle,Followers,Follower Growth,Follower Growth %\n';
+  sorted.forEach((r,idx)=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';csv+=`${idx+1},@${r.handle},${r.followers!=null?r.followers:''},${growth},${growthPct}\n`;});
   const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='ig-follower-report.csv';a.click();URL.revokeObjectURL(url);
 }
 
@@ -338,14 +355,14 @@ function renderReport() {
   const latest=snapshots[snapshots.length-1],prev=snapshots.length>1?snapshots[snapshots.length-2]:null;
   dateEl.textContent=latest.date; generateHighlights(latest,prev);
   const sorted=[...latest.data].sort((a,b)=>b.followers-a.followers);
-  el.innerHTML=sorted.map(d=>{const pe=prev?prev.data.find(p=>p.handle===d.handle):null;const p=pe?pct(d.followers,pe.followers):null;const diff=pe?d.followers-pe.followers:null;return `<div class="report-row"><span style="min-width:130px"><a class="handle-link" href="https://www.instagram.com/${d.handle}/" target="_blank">@${d.handle}</a></span><strong style="min-width:90px">${fmt(d.followers)}</strong><span>${diff!==null?`${renderGrowth(diff)} ${renderPct(p)}`:'<span class="muted">first entry</span>'}</span></div>`;}).join('');
+  el.innerHTML=sorted.map((d,idx)=>{const pe=prev?prev.data.find(p=>p.handle===d.handle):null;const p=pe?pct(d.followers,pe.followers):null;const diff=pe?d.followers-pe.followers:null;return `<div class="report-row"><span style="min-width:24px;font-size:12px;color:#bbb;">${idx+1}</span><span style="min-width:130px"><a class="handle-link" href="https://www.instagram.com/${d.handle}/" target="_blank">@${d.handle}</a></span><strong style="min-width:90px">${fmt(d.followers)}</strong><span>${diff!==null?`${renderGrowth(diff)} ${renderPct(p)}`:'<span class="muted">first entry</span>'}</span></div>`;}).join('');
 }
 
 function exportReport() {
   if(!snapshots.length){alert('No snapshot data yet.');return;}
   const latest=snapshots[snapshots.length-1],prev=snapshots.length>1?snapshots[snapshots.length-2]:null;
   let txt=`Instagram Weekly Report — ${latest.date}\n${'─'.repeat(44)}\n`;
-  [...latest.data].sort((a,b)=>b.followers-a.followers).forEach(d=>{const pe=prev?prev.data.find(p=>p.handle===d.handle):null;const p=pe?pct(d.followers,pe.followers):null;const diff=pe?d.followers-pe.followers:null;const ch=diff!==null?` | ${diff>=0?'+':''}${Number(diff).toLocaleString()} (${p!=null?(p>=0?'+':'')+p.toFixed(2)+'%':'—'})`:'  | first entry';txt+=`@${d.handle}: ${fmt(d.followers)}${ch}\n`;});
+  [...latest.data].sort((a,b)=>b.followers-a.followers).forEach((d,idx)=>{const pe=prev?prev.data.find(p=>p.handle===d.handle):null;const p=pe?pct(d.followers,pe.followers):null;const diff=pe?d.followers-pe.followers:null;const ch=diff!==null?` | ${diff>=0?'+':''}${Number(diff).toLocaleString()} (${p!=null?(p>=0?'+':'')+p.toFixed(2)+'%':'—'})`:'  | first entry';txt+=`${idx+1}. @${d.handle}: ${fmt(d.followers)}${ch}\n`;});
   navigator.clipboard.writeText(txt).then(()=>alert('Copied!')).catch(()=>alert(txt));
 }
 
