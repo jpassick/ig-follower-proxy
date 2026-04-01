@@ -3,14 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>IG Follower Tracker</title>
+<title>Alamo Records — IG Tracker</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9f9f7; color: #1a1a1a; padding: 2rem; }
-  .container { max-width: 760px; margin: 0 auto; }
-  h1 { font-size: 20px; font-weight: 600; margin-bottom: 0.25rem; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9f9f7; color: #1a1a1a; }
+  .gate { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999; }
+  .gate-logo { width: 220px; margin-bottom: 2.5rem; opacity: 0.85; }
+  .gate-card { width: 340px; }
+  .gate-label { font-size: 12px; color: #999; letter-spacing: 0.08em; text-transform: uppercase; text-align: center; margin-bottom: 1.25rem; }
+  .gate-input { width: 100%; font-size: 14px; padding: 11px 14px; border: 1px solid #e0e0e0; border-radius: 8px; background: #fafafa; color: #1a1a1a; margin-bottom: 10px; outline: none; transition: border-color 0.15s; }
+  .gate-input:focus { border-color: #1a1a1a; background: #fff; }
+  .gate-btn { width: 100%; font-size: 13px; font-weight: 500; padding: 11px; border-radius: 8px; border: none; background: #1a1a1a; color: #fff; cursor: pointer; letter-spacing: 0.03em; transition: background 0.15s; }
+  .gate-btn:hover { background: #333; }
+  .gate-err { font-size: 12px; color: #c0392b; text-align: center; margin-top: 10px; display: none; }
+  .gate-divider { width: 40px; height: 1px; background: #e0e0e0; margin: 0 auto 2rem; }
+  .app { padding: 2rem; max-width: 800px; margin: 0 auto; }
+  .app-header { display: flex; align-items: center; gap: 14px; margin-bottom: 0.25rem; }
+  .app-logo { height: 28px; opacity: 0.8; }
+  h1 { font-size: 18px; font-weight: 600; }
   .subtitle { font-size: 13px; color: #888; margin-bottom: 0.25rem; }
-  .refresh-note { font-size: 12px; color: #aaa; margin-bottom: 1.5rem; }
+  .refresh-note { font-size: 12px; color: #bbb; margin-bottom: 1.5rem; }
+  .view-badge { font-size: 11px; background: #f0f0f0; color: #888; border-radius: 20px; padding: 2px 10px; }
   .tabs { display: flex; gap: 6px; margin-bottom: 1.5rem; }
   .tab { font-size: 13px; padding: 6px 16px; border-radius: 20px; cursor: pointer; border: 1px solid #ddd; background: transparent; color: #666; }
   .tab.active { background: #fff; color: #1a1a1a; border-color: #999; font-weight: 500; }
@@ -33,7 +46,6 @@
   .down { color: #c0392b; font-size: 12px; }
   .muted { color: #aaa; }
   .pill-err { background: #fdf0ee; color: #c0392b; font-size: 11px; padding: 2px 8px; border-radius: 20px; }
-  .actions { display: flex; gap: 8px; margin-top: 1.25rem; flex-wrap: wrap; align-items: center; }
   .report-box { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
   .report-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
   .report-title { font-size: 14px; font-weight: 600; }
@@ -45,12 +57,6 @@
   .saving { font-size: 12px; color: #888; display: none; }
   a.handle-link { color: #1a1a1a; text-decoration: none; }
   a.handle-link:hover { text-decoration: underline; }
-  .password-gate { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f9f9f7; display: flex; align-items: center; justify-content: center; z-index: 999; }
-  .password-box { background: #fff; border: 1px solid #eee; border-radius: 16px; padding: 2rem; width: 320px; text-align: center; }
-  .password-box h2 { font-size: 18px; font-weight: 600; margin-bottom: 0.5rem; }
-  .password-box p { font-size: 13px; color: #888; margin-bottom: 1.25rem; }
-  .password-box input { width: 100%; font-size: 14px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 0.75rem; }
-  .password-box .err { font-size: 12px; color: #c0392b; margin-top: 0.5rem; display: none; }
   .sort-arrow { font-size: 10px; margin-left: 4px; color: #bbb; }
   .sort-arrow.active { color: #1a1a1a; }
   .highlights-box { background: #f0f7ff; border: 1px solid #c8e0f8; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
@@ -58,31 +64,33 @@
   .highlights-content { font-size: 13px; color: #1a1a1a; line-height: 1.7; }
   .highlights-content ul { padding-left: 1.25rem; }
   .highlights-content li { margin-bottom: 4px; }
-  .highlights-loading { font-size: 13px; color: #888; }
-  .view-badge { font-size: 11px; background: #f0f0f0; color: #888; border-radius: 20px; padding: 2px 10px; margin-left: 8px; }
+  .actions { display: flex; gap: 8px; margin-top: 1.25rem; flex-wrap: wrap; align-items: center; }
 </style>
 </head>
 <body>
 
-<div class="password-gate" id="password-gate">
-  <div class="password-box">
-    <h2>IG Follower Tracker</h2>
-    <p>Alamo Records — enter password to continue</p>
-    <input type="password" id="pw-input" placeholder="Password" />
-    <button class="primary" onclick="checkPassword()" style="width:100%">Enter</button>
-    <div class="err" id="pw-err">Incorrect password</div>
+<div class="gate" id="password-gate">
+  <img src="/alamo-logo.png" class="gate-logo" alt="Alamo Records" />
+  <div class="gate-divider"></div>
+  <div class="gate-card">
+    <div class="gate-label">Instagram Follower Tracker</div>
+    <input type="password" class="gate-input" id="pw-input" placeholder="Enter password" />
+    <button class="gate-btn" onclick="checkPassword()">Continue</button>
+    <div class="gate-err" id="pw-err">Incorrect password — try again</div>
   </div>
 </div>
 
-<div class="container" id="main-app" style="display:none;">
-  <h1>Instagram Follower Tracker <span class="view-badge" id="view-badge" style="display:none;">View only</span></h1>
+<div class="app" id="main-app" style="display:none;">
+  <div class="app-header">
+    <img src="/alamo-logo.png" class="app-logo" alt="Alamo Records" />
+    <h1>Instagram Follower Tracker <span class="view-badge" id="view-badge" style="display:none;">View only</span></h1>
+  </div>
   <p class="subtitle">Alamo Records roster</p>
   <p class="refresh-note">** Refreshes every Monday and Friday at 10:00 AM EST</p>
   <div class="tabs">
     <button class="tab active" onclick="switchTab('live')">Live lookup</button>
     <button class="tab" onclick="switchTab('report')">Weekly report</button>
   </div>
-
   <div id="view-live">
     <div class="top-actions" id="admin-actions">
       <button class="secondary" onclick="refreshAll()">↻ Refresh all</button>
@@ -103,21 +111,20 @@
     <table>
       <thead>
         <tr>
-          <th style="width:28%" onclick="sortBy('handle')">Handle <span class="sort-arrow" id="sort-handle">↕</span></th>
-          <th style="width:20%" onclick="sortBy('followers')">Followers <span class="sort-arrow active" id="sort-followers">▼</span></th>
-          <th style="width:18%" onclick="sortBy('growth')">Follower Growth <span class="sort-arrow" id="sort-growth">↕</span></th>
-          <th style="width:18%" onclick="sortBy('pct')">Follower Growth % <span class="sort-arrow" id="sort-pct">↕</span></th>
-          <th style="width:16%"></th>
+          <th style="width:26%" onclick="sortBy('handle')">Handle <span class="sort-arrow" id="sort-handle">↕</span></th>
+          <th style="width:18%" onclick="sortBy('followers')">Followers <span class="sort-arrow active" id="sort-followers">▼</span></th>
+          <th style="width:24%" onclick="sortBy('growth')" id="th-growth">Follower Growth <span class="sort-arrow" id="sort-growth">↕</span></th>
+          <th style="width:24%" onclick="sortBy('pct')" id="th-pct">Follower Growth % <span class="sort-arrow" id="sort-pct">↕</span></th>
+          <th style="width:8%"></th>
         </tr>
       </thead>
       <tbody id="roster-body"></tbody>
     </table>
   </div>
-
   <div id="view-report" style="display:none;">
     <div class="highlights-box" id="highlights-box" style="display:none;">
       <div class="highlights-title">Weekly Highlights</div>
-      <div class="highlights-content" id="highlights-content"><span class="highlights-loading">Generating highlights...</span></div>
+      <div class="highlights-content" id="highlights-content"><span style="color:#888;font-size:13px;">Generating highlights...</span></div>
     </div>
     <div class="report-box">
       <div class="report-header">
@@ -135,355 +142,201 @@
 <script>
 const ADMIN_PASSWORD = 'AlamoRec0rds$';
 const VIEW_PASSWORD = '25Madison';
-let roster = [];
-let snapshots = [];
-let currentSort = { field: 'followers', dir: 'desc' };
-let isAdmin = false;
+let roster = [], snapshots = [], currentSort = { field: 'followers', dir: 'desc' }, isAdmin = false;
 
 function checkPassword() {
   const val = document.getElementById('pw-input').value;
-  if (val === ADMIN_PASSWORD) {
-    sessionStorage.setItem('ig_auth', 'admin');
-    isAdmin = true;
-    showApp();
-  } else if (val === VIEW_PASSWORD) {
-    sessionStorage.setItem('ig_auth', 'viewer');
-    isAdmin = false;
-    showApp();
-  } else {
-    document.getElementById('pw-err').style.display = 'block';
-  }
+  if (val === ADMIN_PASSWORD) { sessionStorage.setItem('ig_auth','admin'); isAdmin=true; showApp(); }
+  else if (val === VIEW_PASSWORD) { sessionStorage.setItem('ig_auth','viewer'); isAdmin=false; showApp(); }
+  else { document.getElementById('pw-err').style.display='block'; }
 }
 
 function showApp() {
-  document.getElementById('password-gate').style.display = 'none';
-  document.getElementById('main-app').style.display = 'block';
+  document.getElementById('password-gate').style.display='none';
+  document.getElementById('main-app').style.display='block';
   if (!isAdmin) {
-    document.getElementById('admin-actions').style.display = 'none';
-    document.getElementById('viewer-actions').style.display = 'flex';
-    document.getElementById('add-row-el').style.display = 'none';
-    document.getElementById('view-badge').style.display = 'inline';
+    document.getElementById('admin-actions').style.display='none';
+    document.getElementById('viewer-actions').style.display='flex';
+    document.getElementById('add-row-el').style.display='none';
+    document.getElementById('view-badge').style.display='inline';
   }
   loadAll();
 }
 
-document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') checkPassword(); });
-
+document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key==='Enter') checkPassword(); });
 const savedAuth = sessionStorage.getItem('ig_auth');
-if (savedAuth === 'admin') { isAdmin = true; showApp(); }
-else if (savedAuth === 'viewer') { isAdmin = false; showApp(); }
+if (savedAuth==='admin') { isAdmin=true; showApp(); } else if (savedAuth==='viewer') { isAdmin=false; showApp(); }
 
 async function loadAll() { await Promise.all([loadRoster(), loadSnapshots()]); }
-
 async function loadRoster() {
-  try {
-    const res = await fetch('/api/roster');
-    const data = await res.json();
-    roster = data.roster || [];
-    renderRoster();
-  } catch(e) { roster = []; renderRoster(); }
+  try { const res=await fetch('/api/roster'); const data=await res.json(); roster=data.roster||[]; renderRoster(); }
+  catch(e) { roster=[]; renderRoster(); }
 }
-
 async function loadSnapshots() {
-  try {
-    const res = await fetch('/api/snapshots');
-    const data = await res.json();
-    snapshots = data.snapshots || [];
-  } catch(e) { snapshots = []; }
+  try { const res=await fetch('/api/snapshots'); const data=await res.json(); snapshots=data.snapshots||[]; updateColumnHeaders(); }
+  catch(e) { snapshots=[]; }
 }
-
 async function persistRoster() {
-  const indicator = document.getElementById('saving-indicator');
-  indicator.style.display = 'inline';
-  try {
-    await fetch('/api/roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roster }) });
-  } catch(e) { console.error('Save failed', e); }
-  indicator.style.display = 'none';
+  const ind=document.getElementById('saving-indicator'); ind.style.display='inline';
+  try { await fetch('/api/roster',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({roster})}); } catch(e) {}
+  ind.style.display='none';
+}
+async function persistSnapshots() {
+  try { await fetch('/api/snapshots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snapshots})}); } catch(e) {}
 }
 
-async function persistSnapshots() {
-  try {
-    await fetch('/api/snapshots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ snapshots }) });
-  } catch(e) { console.error('Snapshot save failed', e); }
+function updateColumnHeaders() {
+  if (snapshots.length >= 2) {
+    const latest=snapshots[snapshots.length-1], prev=snapshots[snapshots.length-2];
+    const range=`(${prev.date} – ${latest.date})`;
+    document.getElementById('th-growth').innerHTML=`Follower Growth <small style="font-weight:400;color:#bbb;font-size:11px;">${range}</small> <span class="sort-arrow" id="sort-growth">↕</span>`;
+    document.getElementById('th-pct').innerHTML=`Follower Growth % <small style="font-weight:400;color:#bbb;font-size:11px;">${range}</small> <span class="sort-arrow" id="sort-pct">↕</span>`;
+  }
 }
 
 function fmt(n) {
-  if (n == null) return '—';
-  if (n >= 1000000) return (n/1000000).toFixed(2) + 'M';
-  if (n >= 1000) return (n/1000).toFixed(1) + 'K';
+  if (n==null) return '—';
+  if (n>=1000000) return (n/1000000).toFixed(2)+'M';
+  if (n>=1000) return (n/1000).toFixed(1)+'K';
   return Number(n).toLocaleString();
 }
-function pct(cur, prev) { if (!prev) return null; return (cur - prev) / prev * 100; }
+function pct(cur,prev) { if (!prev) return null; return (cur-prev)/prev*100; }
 function renderPct(p) {
-  if (p === null) return '<span class="muted">—</span>';
-  const sign = p > 0 ? '+' : '';
-  const cls = p > 0 ? 'up' : p < 0 ? 'down' : 'muted';
-  const arrow = p > 0 ? '▲' : p < 0 ? '▼' : '–';
+  if (p===null) return '<span class="muted">—</span>';
+  const sign=p>0?'+':'', cls=p>0?'up':p<0?'down':'muted', arrow=p>0?'▲':p<0?'▼':'–';
   return `<span class="${cls}">${arrow} ${sign}${p.toFixed(2)}%</span>`;
 }
 function renderGrowth(diff) {
-  if (diff === null) return '<span class="muted">—</span>';
-  const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : 'muted';
-  const sign = diff > 0 ? '+' : '';
+  if (diff===null) return '<span class="muted">—</span>';
+  const cls=diff>0?'up':diff<0?'down':'muted', sign=diff>0?'+':'';
   return `<span class="${cls}">${sign}${Number(diff).toLocaleString()}</span>`;
 }
 function getLastSnap(handle) {
-  for (let i = snapshots.length - 1; i >= 0; i--) {
-    const e = snapshots[i].data.find(d => d.handle === handle);
-    if (e) return e.followers;
-  }
+  for (let i=snapshots.length-1;i>=0;i--) { const e=snapshots[i].data.find(d=>d.handle===handle); if(e) return e.followers; }
   return null;
 }
-
 function sortBy(field) {
-  if (currentSort.field === field) {
-    currentSort.dir = currentSort.dir === 'desc' ? 'asc' : 'desc';
-  } else {
-    currentSort.field = field;
-    currentSort.dir = (field === 'followers' || field === 'growth' || field === 'pct') ? 'desc' : 'asc';
-  }
-  ['handle','followers','growth','pct'].forEach(f => {
-    const el = document.getElementById('sort-' + f);
-    el.textContent = '↕'; el.classList.remove('active');
-  });
-  const arrow = currentSort.dir === 'desc' ? '▼' : '▲';
-  const activeEl = document.getElementById('sort-' + field);
-  activeEl.textContent = arrow; activeEl.classList.add('active');
+  if (currentSort.field===field) { currentSort.dir=currentSort.dir==='desc'?'asc':'desc'; }
+  else { currentSort.field=field; currentSort.dir=(field==='followers'||field==='growth'||field==='pct')?'desc':'asc'; }
+  ['handle','followers','growth','pct'].forEach(f => { const el=document.getElementById('sort-'+f); if(el){el.textContent='↕';el.classList.remove('active');} });
+  const arrow=currentSort.dir==='desc'?'▼':'▲';
+  const activeEl=document.getElementById('sort-'+field); if(activeEl){activeEl.textContent=arrow;activeEl.classList.add('active');}
   renderRoster();
 }
-
 function getSortedRoster() {
-  return [...roster].map((r, i) => {
-    const prev = getLastSnap(r.handle);
-    const diff = (r.followers != null && prev != null) ? r.followers - prev : null;
-    const p = (r.followers != null && prev != null) ? pct(r.followers, prev) : null;
-    return { ...r, _origIndex: i, _diff: diff, _pct: p };
-  }).sort((a, b) => {
-    let av, bv;
-    if (currentSort.field === 'followers') { av = a.followers || 0; bv = b.followers || 0; }
-    else if (currentSort.field === 'growth') { av = a._diff ?? -Infinity; bv = b._diff ?? -Infinity; }
-    else if (currentSort.field === 'pct') { av = a._pct ?? -Infinity; bv = b._pct ?? -Infinity; }
-    else { av = a.handle || ''; bv = b.handle || ''; }
-    if (av < bv) return currentSort.dir === 'asc' ? -1 : 1;
-    if (av > bv) return currentSort.dir === 'asc' ? 1 : -1;
+  return [...roster].map((r,i) => {
+    const prev=getLastSnap(r.handle), diff=(r.followers!=null&&prev!=null)?r.followers-prev:null, p=(r.followers!=null&&prev!=null)?pct(r.followers,prev):null;
+    return {...r,_origIndex:i,_diff:diff,_pct:p};
+  }).sort((a,b) => {
+    let av,bv;
+    if(currentSort.field==='followers'){av=a.followers||0;bv=b.followers||0;}
+    else if(currentSort.field==='growth'){av=a._diff??-Infinity;bv=b._diff??-Infinity;}
+    else if(currentSort.field==='pct'){av=a._pct??-Infinity;bv=b._pct??-Infinity;}
+    else{av=a.handle||'';bv=b.handle||'';}
+    if(av<bv) return currentSort.dir==='asc'?-1:1;
+    if(av>bv) return currentSort.dir==='asc'?1:-1;
     return 0;
   });
 }
-
 function renderRoster() {
-  const tbody = document.getElementById('roster-body');
-  if (!roster.length) { tbody.innerHTML = `<tr><td colspan="${isAdmin ? 5 : 4}" class="muted" style="padding:12px 0;font-size:13px;">No handles added yet</td></tr>`; return; }
-  const sorted = getSortedRoster();
-  tbody.innerHTML = sorted.map(r => {
-    const i = r._origIndex;
-    const fc = r.status === 'loading' ? '<span class="muted">fetching...</span>'
-      : r.status === 'error' ? '<span class="pill-err">error</span>'
-      : `<strong>${fmt(r.followers)}</strong>`;
-    const igUrl = `https://www.instagram.com/${r.handle}/`;
-    const removeBtn = isAdmin ? `<td style="text-align:right"><button class="danger" onclick="removeHandle(${i})">✕</button></td>` : '';
-    return `<tr>
-      <td><a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></td>
-      <td>${fc}</td>
-      <td>${r.status === 'ok' ? renderGrowth(r._diff) : '<span class="muted">—</span>'}</td>
-      <td>${r.status === 'ok' ? renderPct(r._pct) : '<span class="muted">—</span>'}</td>
-      ${removeBtn}
-    </tr>`;
+  const tbody=document.getElementById('roster-body');
+  if(!roster.length){tbody.innerHTML=`<tr><td colspan="${isAdmin?5:4}" class="muted" style="padding:12px 0;font-size:13px;">No handles added yet</td></tr>`;return;}
+  const sorted=getSortedRoster();
+  tbody.innerHTML=sorted.map(r => {
+    const i=r._origIndex;
+    const fc=r.status==='loading'?'<span class="muted">fetching...</span>':r.status==='error'?'<span class="pill-err">error</span>':`<strong>${fmt(r.followers)}</strong>`;
+    const igUrl=`https://www.instagram.com/${r.handle}/`;
+    const removeBtn=isAdmin?`<td style="text-align:right"><button class="danger" onclick="removeHandle(${i})">✕</button></td>`:'';
+    return `<tr><td><a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></td><td>${fc}</td><td>${r.status==='ok'?renderGrowth(r._diff):'<span class="muted">—</span>'}</td><td>${r.status==='ok'?renderPct(r._pct):'<span class="muted">—</span>'}</td>${removeBtn}</tr>`;
   }).join('');
 }
-
 async function fetchFollowers(handle) {
-  const res = await fetch(`/api/followers?username=${encodeURIComponent(handle)}`);
-  if (!res.ok) throw new Error(`Server error ${res.status}`);
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  if (data.follower_count == null) throw new Error('No count returned');
+  const res=await fetch(`/api/followers?username=${encodeURIComponent(handle)}`);
+  if(!res.ok) throw new Error(`Server error ${res.status}`);
+  const data=await res.json(); if(data.error) throw new Error(data.error);
+  if(data.follower_count==null) throw new Error('No count returned');
   return data.follower_count;
 }
-
-function showErr(msg) {
-  const el = document.getElementById('err-box');
-  el.textContent = msg; el.style.display = 'block';
-  setTimeout(() => { el.style.display = 'none'; }, 7000);
-}
-
+function showErr(msg) { const el=document.getElementById('err-box'); el.textContent=msg; el.style.display='block'; setTimeout(()=>{el.style.display='none';},7000); }
 async function addHandle() {
-  const input = document.getElementById('add-input');
-  const handle = input.value.trim().replace('@','').toLowerCase();
-  if (!handle) return;
-  if (roster.find(r => r.handle === handle)) { showErr('@' + handle + ' already in roster.'); return; }
-  input.value = '';
-  const entry = { handle: handle, followers: null, status: 'loading' };
+  const input=document.getElementById('add-input'), handle=input.value.trim().replace('@','').toLowerCase();
+  if(!handle) return;
+  if(roster.find(r=>r.handle===handle)){showErr('@'+handle+' already in roster.');return;}
+  input.value='';
+  const entry={handle:handle,followers:null,status:'loading'};
   roster.push(entry); renderRoster();
-  try { entry.followers = await fetchFollowers(handle); entry.status = 'ok'; }
-  catch(e) { entry.status = 'error'; showErr('Error on @' + handle + ': ' + e.message); }
-  renderRoster();
-  await persistRoster();
+  try{entry.followers=await fetchFollowers(handle);entry.status='ok';}
+  catch(e){entry.status='error';showErr('Error on @'+handle+': '+e.message);}
+  renderRoster(); await persistRoster();
 }
-
-async function removeHandle(i) {
-  roster.splice(i, 1); renderRoster();
-  await persistRoster();
-}
-
+async function removeHandle(i) { roster.splice(i,1); renderRoster(); await persistRoster(); }
 async function refreshAll() {
-  for (const r of roster) {
-    r.status = 'loading'; renderRoster();
-    try { r.followers = await fetchFollowers(r.handle); r.status = 'ok'; }
-    catch(e) { r.status = 'error'; }
-    renderRoster();
-  }
+  for(const r of roster){r.status='loading';renderRoster();try{r.followers=await fetchFollowers(r.handle);r.status='ok';}catch(e){r.status='error';}renderRoster();}
   await persistRoster();
 }
-
 async function saveSnapshot() {
-  const valid = roster.filter(r => r.followers != null);
-  if (!valid.length) { showErr('No data yet.'); return; }
-  const snap = { date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), ts: Date.now(), data: valid.map(r => ({ handle: r.handle, followers: r.followers })) };
-  snapshots.push(snap);
-  await persistSnapshots();
-  renderReport();
-  alert('Snapshot saved — ' + snap.date);
+  const valid=roster.filter(r=>r.followers!=null);
+  if(!valid.length){showErr('No data yet.');return;}
+  const snap={date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),ts:Date.now(),data:valid.map(r=>({handle:r.handle,followers:r.followers}))};
+  snapshots.push(snap); await persistSnapshots(); updateColumnHeaders(); renderReport();
+  alert('Snapshot saved — '+snap.date);
 }
-
 async function sendEmailNow() {
-  const btn = event.target;
-  btn.textContent = 'Sending...';
-  btn.disabled = true;
-  try {
-    const res = await fetch('/api/send-email', { method: 'POST' });
-    const data = await res.json();
-    if (data.ok) alert('Email sent successfully!');
-    else alert('Error: ' + (data.error || 'Unknown error'));
-  } catch(e) { alert('Failed to send: ' + e.message); }
-  btn.textContent = '✉ Send email update';
-  btn.disabled = false;
+  const btn=event.target; btn.textContent='Sending...'; btn.disabled=true;
+  try{const res=await fetch('/api/send-email',{method:'POST'});const data=await res.json();if(data.ok)alert('Email sent!');else alert('Error: '+(data.error||'Unknown'));}
+  catch(e){alert('Failed: '+e.message);}
+  btn.textContent='✉ Send email update'; btn.disabled=false;
 }
-
 function downloadCSV() {
-  const sorted = getSortedRoster();
-  let csv = 'Handle,Followers,Follower Growth,Follower Growth %\n';
-  sorted.forEach(r => {
-    const growth = r._diff !== null ? (r._diff >= 0 ? '+' : '') + r._diff : '';
-    const growthPct = r._pct !== null ? (r._pct >= 0 ? '+' : '') + r._pct.toFixed(2) + '%' : '';
-    csv += `@${r.handle},${r.followers != null ? r.followers : ''},${growth},${growthPct}\n`;
-  });
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'ig-follower-report.csv'; a.click();
-  URL.revokeObjectURL(url);
+  const sorted=getSortedRoster(); let csv='Handle,Followers,Follower Growth,Follower Growth %\n';
+  sorted.forEach(r=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';csv+=`@${r.handle},${r.followers!=null?r.followers:''},${growth},${growthPct}\n`;});
+  const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='ig-follower-report.csv';a.click();URL.revokeObjectURL(url);
 }
-
-async function generateHighlights(latest, prev) {
-  const box = document.getElementById('highlights-box');
-  const content = document.getElementById('highlights-content');
-  box.style.display = 'block';
-  content.innerHTML = '<span class="highlights-loading">Generating highlights...</span>';
-
-  if (!prev) {
-    content.innerHTML = '<ul><li>This is the first snapshot — growth data will appear after the next refresh.</li></ul>';
-    return;
-  }
-
-  const changes = latest.data.map(d => {
-    const pe = prev.data.find(p => p.handle === d.handle);
-    const diff = pe ? d.followers - pe.followers : null;
-    const p = pe ? ((d.followers - pe.followers) / pe.followers * 100) : null;
-    return { handle: d.handle, followers: d.followers, diff, pct: p };
-  }).filter(d => d.diff !== null);
-
-  const sorted = [...changes].sort((a, b) => b.diff - a.diff);
-  const biggestGainer = sorted[0];
-  const biggestDrop = sorted[sorted.length - 1];
-  const gainers = changes.filter(c => c.diff > 0).length;
-  const losers = changes.filter(c => c.diff < 0).length;
-  const milestones = changes.filter(c => {
-    const prevFollowers = c.followers - c.diff;
-    const thresholds = [100000, 250000, 500000, 1000000, 2000000, 5000000, 10000000];
-    return thresholds.some(t => prevFollowers < t && c.followers >= t);
-  });
-
-  const prompt = `You are a music industry analyst writing a brief weekly highlights summary for a record label's Instagram follower report. Write 3-5 bullet points in full sentences. Be concise and direct. Use the data below.
-
-Date: ${latest.date}
-Total artists tracked: ${latest.data.length}
-Artists that gained followers: ${gainers}
-Artists that lost followers: ${losers}
-Biggest gainer: @${biggestGainer.handle} (+${biggestGainer.diff.toLocaleString()} followers, +${biggestGainer.pct.toFixed(2)}%)
-Biggest drop: @${biggestDrop.handle} (${biggestDrop.diff.toLocaleString()} followers, ${biggestDrop.pct.toFixed(2)}%)
-${milestones.length > 0 ? 'Milestone crossings: ' + milestones.map(m => '@' + m.handle).join(', ') : 'No milestone crossings this week.'}
-Top 5 by followers: ${sorted.slice(0,5).map(d => '@' + d.handle).join(', ')}
-
-Write bullet points only. No intro. No conclusion. Start each line with a dash.`;
-
+async function generateHighlights(latest,prev) {
+  const box=document.getElementById('highlights-box'),content=document.getElementById('highlights-content');
+  box.style.display='block'; content.innerHTML='<span style="color:#888;font-size:13px;">Generating highlights...</span>';
+  if(!prev){content.innerHTML='<ul><li>This is the first snapshot — growth data will appear after the next refresh.</li></ul>';return;}
+  const changes=latest.data.map(d=>{const pe=prev.data.find(p=>p.handle===d.handle);const diff=pe?d.followers-pe.followers:null;const p=pe?((d.followers-pe.followers)/pe.followers*100):null;return{handle:d.handle,followers:d.followers,diff,pct:p};}).filter(d=>d.diff!==null);
+  const sorted=[...changes].sort((a,b)=>b.diff-a.diff);
+  const biggestGainer=sorted[0],biggestDrop=sorted[sorted.length-1],gainers=changes.filter(c=>c.diff>0).length,losers=changes.filter(c=>c.diff<0).length;
+  const milestones=changes.filter(c=>{const pf=c.followers-c.diff;return[100000,250000,500000,1000000,2000000,5000000,10000000].some(t=>pf<t&&c.followers>=t);});
+  const prompt=`You are a music industry analyst writing a brief weekly highlights summary for a record label's Instagram follower report. Write 3-5 bullet points in full sentences. Be concise.\n\nDate: ${latest.date}\nArtists: ${latest.data.length}\nGained: ${gainers}, Lost: ${losers}\nBiggest gainer: @${biggestGainer.handle} (+${biggestGainer.diff.toLocaleString()}, +${biggestGainer.pct.toFixed(2)}%)\nBiggest drop: @${biggestDrop.handle} (${biggestDrop.diff.toLocaleString()}, ${biggestDrop.pct.toFixed(2)}%)\n${milestones.length>0?'Milestones: '+milestones.map(m=>'@'+m.handle).join(', '):'No milestones.'}\n\nStart each bullet with a dash. No intro or conclusion.`;
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 500,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    const data = await res.json();
-    const text = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
-    const lines = text.split('\n').filter(l => l.trim());
-    content.innerHTML = '<ul>' + lines.map(l => `<li>${l.replace(/^[-•]\s*/, '')}</li>`).join('') + '</ul>';
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
+    const lines=text.split('\n').filter(l=>l.trim());
+    content.innerHTML='<ul>'+lines.map(l=>`<li>${l.replace(/^[-•]\s*/,'')}</li>`).join('')+'</ul>';
   } catch(e) {
-    const bullets = [];
+    const bullets=[];
     bullets.push(`${gainers} out of ${latest.data.length} artists gained followers this week, while ${losers} saw a decline.`);
-    if (biggestGainer?.diff > 0) bullets.push(`The biggest gainer was @${biggestGainer.handle}, adding ${biggestGainer.diff.toLocaleString()} followers (+${biggestGainer.pct.toFixed(2)}%).`);
-    if (biggestDrop?.diff < 0) bullets.push(`The biggest drop was @${biggestDrop.handle} with ${Math.abs(biggestDrop.diff).toLocaleString()} followers lost (${biggestDrop.pct.toFixed(2)}%).`);
-    if (milestones.length > 0) bullets.push(`Milestone: ${milestones.map(m => '@' + m.handle).join(', ')} crossed a major follower threshold.`);
-    content.innerHTML = '<ul>' + bullets.map(b => `<li>${b}</li>`).join('') + '</ul>';
+    if(biggestGainer?.diff>0) bullets.push(`Biggest gainer: @${biggestGainer.handle} added ${biggestGainer.diff.toLocaleString()} followers (+${biggestGainer.pct.toFixed(2)}%).`);
+    if(biggestDrop?.diff<0) bullets.push(`Biggest drop: @${biggestDrop.handle} lost ${Math.abs(biggestDrop.diff).toLocaleString()} followers (${biggestDrop.pct.toFixed(2)}%).`);
+    if(milestones.length>0) bullets.push(`Milestone: ${milestones.map(m=>'@'+m.handle).join(', ')} crossed a major follower threshold.`);
+    content.innerHTML='<ul>'+bullets.map(b=>`<li>${b}</li>`).join('')+'</ul>';
   }
 }
-
 function renderReport() {
-  const el = document.getElementById('report-rows');
-  const dateEl = document.getElementById('report-date');
-  if (!snapshots.length) { el.innerHTML = '<div class="muted" style="font-size:13px;">No snapshots yet.</div>'; return; }
-  const latest = snapshots[snapshots.length - 1];
-  const prev = snapshots.length > 1 ? snapshots[snapshots.length - 2] : null;
-  dateEl.textContent = latest.date;
-  generateHighlights(latest, prev);
-  const sorted = [...latest.data].sort((a, b) => b.followers - a.followers);
-  el.innerHTML = sorted.map(d => {
-    const pe = prev ? prev.data.find(p => p.handle === d.handle) : null;
-    const p = pe ? pct(d.followers, pe.followers) : null;
-    const diff = pe ? d.followers - pe.followers : null;
-    return `<div class="report-row">
-      <span style="min-width:130px"><a class="handle-link" href="https://www.instagram.com/${d.handle}/" target="_blank">@${d.handle}</a></span>
-      <strong style="min-width:90px">${fmt(d.followers)}</strong>
-      <span>${diff !== null ? `${renderGrowth(diff)} ${renderPct(p)}` : '<span class="muted">first entry</span>'}</span>
-    </div>`;
-  }).join('');
+  const el=document.getElementById('report-rows'),dateEl=document.getElementById('report-date');
+  if(!snapshots.length){el.innerHTML='<div class="muted" style="font-size:13px;">No snapshots yet.</div>';return;}
+  const latest=snapshots[snapshots.length-1],prev=snapshots.length>1?snapshots[snapshots.length-2]:null;
+  dateEl.textContent=latest.date; generateHighlights(latest,prev);
+  const sorted=[...latest.data].sort((a,b)=>b.followers-a.followers);
+  el.innerHTML=sorted.map(d=>{const pe=prev?prev.data.find(p=>p.handle===d.handle):null;const p=pe?pct(d.followers,pe.followers):null;const diff=pe?d.followers-pe.followers:null;return `<div class="report-row"><span style="min-width:130px"><a class="handle-link" href="https://www.instagram.com/${d.handle}/" target="_blank">@${d.handle}</a></span><strong style="min-width:90px">${fmt(d.followers)}</strong><span>${diff!==null?`${renderGrowth(diff)} ${renderPct(p)}`:'<span class="muted">first entry</span>'}</span></div>`;}).join('');
 }
-
 function exportReport() {
-  if (!snapshots.length) { alert('No snapshot data yet.'); return; }
-  const latest = snapshots[snapshots.length - 1];
-  const prev = snapshots.length > 1 ? snapshots[snapshots.length - 2] : null;
-  let txt = `Instagram Weekly Report — ${latest.date}\n${'─'.repeat(44)}\n`;
-  [...latest.data].sort((a,b) => b.followers - a.followers).forEach(d => {
-    const pe = prev ? prev.data.find(p => p.handle === d.handle) : null;
-    const p = pe ? pct(d.followers, pe.followers) : null;
-    const diff = pe ? d.followers - pe.followers : null;
-    const ch = diff !== null ? ` | ${diff >= 0 ? '+' : ''}${Number(diff).toLocaleString()} (${p != null ? (p >= 0 ? '+' : '') + p.toFixed(2) + '%' : '—'})` : ' | first entry';
-    txt += `@${d.handle}: ${fmt(d.followers)}${ch}\n`;
-  });
-  navigator.clipboard.writeText(txt).then(() => alert('Copied!')).catch(() => alert(txt));
+  if(!snapshots.length){alert('No snapshot data yet.');return;}
+  const latest=snapshots[snapshots.length-1],prev=snapshots.length>1?snapshots[snapshots.length-2]:null;
+  let txt=`Instagram Weekly Report — ${latest.date}\n${'─'.repeat(44)}\n`;
+  [...latest.data].sort((a,b)=>b.followers-a.followers).forEach(d=>{const pe=prev?prev.data.find(p=>p.handle===d.handle):null;const p=pe?pct(d.followers,pe.followers):null;const diff=pe?d.followers-pe.followers:null;const ch=diff!==null?` | ${diff>=0?'+':''}${Number(diff).toLocaleString()} (${p!=null?(p>=0?'+':'')+p.toFixed(2)+'%':'—'})`:'  | first entry';txt+=`@${d.handle}: ${fmt(d.followers)}${ch}\n`;});
+  navigator.clipboard.writeText(txt).then(()=>alert('Copied!')).catch(()=>alert(txt));
 }
-
 function switchTab(tab) {
-  document.querySelectorAll('.tab').forEach((el, i) => el.classList.toggle('active', ['live','report'][i] === tab));
-  document.getElementById('view-live').style.display = tab === 'live' ? '' : 'none';
-  document.getElementById('view-report').style.display = tab === 'report' ? '' : 'none';
-  if (tab === 'report') renderReport();
+  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',['live','report'][i]===tab));
+  document.getElementById('view-live').style.display=tab==='live'?'':'none';
+  document.getElementById('view-report').style.display=tab==='report'?'':'none';
+  if(tab==='report') renderReport();
 }
-
-document.getElementById('add-input').addEventListener('keydown', e => { if (e.key === 'Enter') addHandle(); });
+document.getElementById('add-input').addEventListener('keydown',e=>{if(e.key==='Enter')addHandle();});
 </script>
 </body>
 </html>
