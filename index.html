@@ -27,6 +27,9 @@
   .tabs { display: flex; gap: 6px; margin-bottom: 1.5rem; }
   .tab { font-size: 13px; padding: 6px 16px; border-radius: 20px; cursor: pointer; border: 1px solid #ddd; background: transparent; color: #666; }
   .tab.active { background: #fff; color: #1a1a1a; border-color: #999; font-weight: 500; }
+  .roster-tabs { display: flex; gap: 6px; margin-bottom: 1rem; }
+  .roster-tab { font-size: 12px; padding: 4px 12px; border-radius: 20px; cursor: pointer; border: 1px solid #ddd; background: transparent; color: #888; }
+  .roster-tab.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
   .top-actions { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
   .add-row { display: flex; gap: 8px; margin-bottom: 1rem; }
   .add-row input { flex: 1; font-size: 14px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
@@ -53,7 +56,6 @@
   .report-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 14px; gap: 8px; }
   .report-row:last-child { border-bottom: none; }
   .err-box { background: #fdf0ee; border: 1px solid #f0c0bb; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #c0392b; margin-bottom: 10px; display: none; }
-  .section-title { font-size: 14px; font-weight: 500; margin-bottom: 10px; }
   .saving { font-size: 12px; color: #888; display: none; }
   a.handle-link { color: #1a1a1a; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: #ddd; }
   a.handle-link:hover { text-decoration-color: #1a1a1a; }
@@ -66,6 +68,9 @@
   .highlights-content li { margin-bottom: 4px; }
   .actions { display: flex; gap: 8px; margin-top: 1.25rem; flex-wrap: wrap; align-items: center; }
   .rank { font-size: 12px; color: #bbb; font-weight: 500; min-width: 20px; }
+  .star-btn { background: none; border: none; cursor: pointer; padding: 0 6px 0 0; font-size: 15px; color: #ddd; line-height: 1; }
+  .star-btn.starred { color: #f0b429; }
+  .star-btn:hover { background: none; color: #f0b429; }
 </style>
 </head>
 <body>
@@ -92,6 +97,7 @@
     <button class="tab active" onclick="switchTab('live')">Live lookup</button>
     <button class="tab" onclick="switchTab('report')">Weekly report</button>
   </div>
+
   <div id="view-live">
     <div class="top-actions" id="admin-actions">
       <button class="secondary" onclick="refreshAll()">↻ Refresh all</button>
@@ -103,7 +109,10 @@
     <div class="top-actions" id="viewer-actions" style="display:none;">
       <button class="secondary" onclick="downloadCSV()">↓ Download CSV</button>
     </div>
-    <div class="section-title">Artist roster</div>
+    <div class="roster-tabs">
+      <button class="roster-tab active" onclick="switchRosterTab('all')">Full roster</button>
+      <button class="roster-tab" onclick="switchRosterTab('my')">My roster</button>
+    </div>
     <div class="add-row" id="add-row-el">
       <input type="text" id="add-input" placeholder="Instagram handle, e.g. rodwave" />
       <button class="primary" onclick="addHandle()">Add + fetch</button>
@@ -113,16 +122,18 @@
       <thead>
         <tr>
           <th style="width:4%">#</th>
-          <th style="width:24%" onclick="sortBy('handle')">Handle <span class="sort-arrow" id="sort-handle">↕</span></th>
+          <th style="width:4%"></th>
+          <th style="width:22%" onclick="sortBy('handle')">Handle <span class="sort-arrow" id="sort-handle">↕</span></th>
           <th style="width:17%" onclick="sortBy('followers')">Followers <span class="sort-arrow active" id="sort-followers">▼</span></th>
           <th style="width:22%" onclick="sortBy('growth')" id="th-growth">Follower Growth <span class="sort-arrow" id="sort-growth">↕</span></th>
           <th style="width:22%" onclick="sortBy('pct')" id="th-pct">Follower Growth % <span class="sort-arrow" id="sort-pct">↕</span></th>
-          <th style="width:11%"></th>
+          <th style="width:9%"></th>
         </tr>
       </thead>
       <tbody id="roster-body"></tbody>
     </table>
   </div>
+
   <div id="view-report" style="display:none;">
     <div class="highlights-box" id="highlights-box" style="display:none;">
       <div class="highlights-title">Weekly Highlights</div>
@@ -144,7 +155,19 @@
 <script>
 const ADMIN_PASSWORD = 'AlamoRec0rds$';
 const VIEW_PASSWORD = '25Madison';
+const STARRED_KEY = 'ig_starred_v1';
 let roster = [], snapshots = [], currentSort = { field: 'followers', dir: 'desc' }, isAdmin = false;
+let currentRosterTab = 'all';
+let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
+
+function saveStarred() { localStorage.setItem(STARRED_KEY, JSON.stringify([...starred])); }
+
+function toggleStar(handle) {
+  if (starred.has(handle)) starred.delete(handle);
+  else starred.add(handle);
+  saveStarred();
+  renderRoster();
+}
 
 function checkPassword() {
   const val = document.getElementById('pw-input').value;
@@ -230,6 +253,12 @@ function getLastSnap(handle) {
   return null;
 }
 
+function switchRosterTab(tab) {
+  currentRosterTab = tab;
+  document.querySelectorAll('.roster-tab').forEach((el,i) => el.classList.toggle('active', ['all','my'][i]===tab));
+  renderRoster();
+}
+
 function sortBy(field) {
   if (currentSort.field===field) { currentSort.dir=currentSort.dir==='desc'?'asc':'desc'; }
   else { currentSort.field=field; currentSort.dir=(field==='followers'||field==='growth'||field==='pct')?'desc':'asc'; }
@@ -239,11 +268,13 @@ function sortBy(field) {
   renderRoster();
 }
 
-function getSortedRoster() {
-  return [...roster].map((r,i) => {
+function getSortedRoster(filterStarred=false) {
+  let list = [...roster].map((r,i) => {
     const prev=getLastSnap(r.handle), diff=(r.followers!=null&&prev!=null)?r.followers-prev:null, p=(r.followers!=null&&prev!=null)?pct(r.followers,prev):null;
     return {...r,_origIndex:i,_diff:diff,_pct:p};
-  }).sort((a,b) => {
+  });
+  if (filterStarred) list = list.filter(r => starred.has(r.handle));
+  return list.sort((a,b) => {
     let av,bv;
     if(currentSort.field==='followers'){av=a.followers||0;bv=b.followers||0;}
     else if(currentSort.field==='growth'){av=a._diff??-Infinity;bv=b._diff??-Infinity;}
@@ -257,15 +288,22 @@ function getSortedRoster() {
 
 function renderRoster() {
   const tbody=document.getElementById('roster-body');
-  if(!roster.length){tbody.innerHTML=`<tr><td colspan="${isAdmin?6:5}" class="muted" style="padding:12px 0;font-size:13px;">No handles added yet</td></tr>`;return;}
-  const sorted=getSortedRoster();
+  const isMyRoster = currentRosterTab === 'my';
+  const sorted = getSortedRoster(isMyRoster);
+  const cols = isAdmin ? 7 : 6;
+
+  if (!roster.length) { tbody.innerHTML=`<tr><td colspan="${cols}" class="muted" style="padding:12px 0;font-size:13px;">No handles added yet</td></tr>`; return; }
+  if (isMyRoster && sorted.length === 0) { tbody.innerHTML=`<tr><td colspan="${cols}" style="padding:12px 0;font-size:13px;color:#aaa;">No starred artists yet — click ☆ next to any artist to add them here.</td></tr>`; return; }
+
   tbody.innerHTML=sorted.map((r,rankIdx) => {
     const i=r._origIndex;
     const fc=r.status==='loading'?'<span class="muted">fetching...</span>':r.status==='error'?'<span class="pill-err">error</span>':`<strong>${fmt(r.followers)}</strong>`;
     const igUrl=`https://www.instagram.com/${r.handle}/`;
+    const isStarred = starred.has(r.handle);
     const removeBtn=isAdmin?`<td style="text-align:right"><button class="danger" onclick="removeHandle(${i})">✕</button></td>`:'';
     return `<tr>
       <td><span class="rank">${rankIdx+1}</span></td>
+      <td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td>
       <td><a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></td>
       <td>${fc}</td>
       <td>${r.status==='ok'?renderGrowth(r._diff):'<span class="muted">—</span>'}</td>
@@ -320,7 +358,7 @@ async function sendEmailNow() {
 }
 
 function downloadCSV() {
-  const sorted=getSortedRoster(); let csv='Rank,Handle,Followers,Follower Growth,Follower Growth %\n';
+  const sorted=getSortedRoster(currentRosterTab==='my'); let csv='Rank,Handle,Followers,Follower Growth,Follower Growth %\n';
   sorted.forEach((r,idx)=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';csv+=`${idx+1},@${r.handle},${r.followers!=null?r.followers:''},${growth},${growthPct}\n`;});
   const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='ig-follower-report.csv';a.click();URL.revokeObjectURL(url);
 }
