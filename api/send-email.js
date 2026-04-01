@@ -75,7 +75,7 @@ export default async function handler(req, res) {
     headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       from: 'Alamo IG Tracker <onboarding@resend.dev>',
-      to: ['jpassick@gmail.com', 'jacob@alamo-records.com'],
+      to: ['jacobpassickdigital@gmail.com'],
       subject: `Alamo IG Weekly Report — ${latest.date}`,
       html
     })
