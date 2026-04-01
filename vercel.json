@@ -3,6 +3,10 @@
     {
       "path": "/api/cron-snapshot",
       "schedule": "0 15 * * 1"
+    },
+    {
+      "path": "/api/cron-snapshot",
+      "schedule": "0 15 * * 5"
     }
   ]
 }
