@@ -30,7 +30,7 @@
   .tabs { display: flex; gap: 6px; margin-bottom: 1.5rem; }
   .tab { font-size: 13px; padding: 6px 16px; border-radius: 20px; cursor: pointer; border: 1px solid #ddd; background: transparent; color: #666; }
   .tab.active { background: #fff; color: #1a1a1a; border-color: #999; font-weight: 500; }
-  .roster-tabs { display: flex; gap: 6px; margin-bottom: 1rem; }
+  .roster-tabs { display: flex; gap: 6px; }
   .roster-tab { font-size: 12px; padding: 4px 12px; border-radius: 20px; cursor: pointer; border: 1px solid #ddd; background: transparent; color: #888; }
   .roster-tab.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
   .period-tabs { display: flex; gap: 4px; align-items: center; }
@@ -241,9 +241,17 @@ async function loadSnapshots() {
 function updateLastUpdated() {
   const el=document.getElementById('last-updated');
   const timestamps=roster.filter(r=>r.updatedAt).map(r=>r.updatedAt);
-  if(!timestamps.length){el.textContent='';return;}
-  const d=new Date(Math.max(...timestamps));
-  el.textContent=`Last updated: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
+  if(timestamps.length){
+    const d=new Date(Math.max(...timestamps));
+    el.textContent=`Last updated: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
+    return;
+  }
+  if(snapshots.length){
+    const d=new Date(snapshots[snapshots.length-1].ts);
+    el.textContent=`Last snapshot: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
+    return;
+  }
+  el.textContent='';
 }
 
 async function persistRoster() {
@@ -261,7 +269,7 @@ function setPeriod(days) {
   document.querySelectorAll('.period-tab').forEach(el=>el.classList.remove('active'));
   const map={1:'period-1',7:'period-7',14:'period-14',30:'period-30'};
   const el=document.getElementById(map[days]); if(el) el.classList.add('active');
-  updateColumnHeaders(); renderRoster();
+  renderRoster();
 }
 
 function getSnapshotPair() {
@@ -276,23 +284,16 @@ function getSnapshotPair() {
 
 function shortDate(dateStr){const d=new Date(dateStr);if(isNaN(d))return dateStr;return `${d.getMonth()+1}/${d.getDate()}`;}
 
-function updateColumnHeaders() {
-  const pair=getSnapshotPair();
-  const ge=document.getElementById('th-growth'),pe=document.getElementById('th-pct');
-  if(ge&&pe){
-    const label=pair&&pair.prev?`(${shortDate(pair.prev.date)} – ${shortDate(pair.latest.date)})`:pair&&pair.latest?`(as of ${shortDate(pair.latest.date)})`:'';
-    if(label){
-      ge.innerHTML=`Follower Growth <small style="font-weight:400;color:#bbb;font-size:11px;">${label}</small> <span class="sort-arrow" id="sort-growth">↕</span>`;
-      pe.innerHTML=`Follower Growth % <small style="font-weight:400;color:#bbb;font-size:11px;">${label}</small> <span class="sort-arrow" id="sort-pct">↕</span>`;
-    }
-  }
-  updateReportHeaders();
-}
+function updateColumnHeaders() { updateReportHeaders(); }
 
 function updateReportHeaders(){
   const pair=getSnapshotPair();
   const g=document.getElementById('report-th-growth'),p=document.getElementById('report-th-pct');
-  if(pair&&g&&p){const label=pair.prev?`(${shortDate(pair.prev.date)} – ${shortDate(pair.latest.date)})`:pair.latest?`(as of ${shortDate(pair.latest.date)})`:'';g.textContent=`Follower Growth ${label}`;p.textContent=`Follower Growth % ${label}`;}
+  if(pair&&g&&p){
+    const label=pair.prev?`(${shortDate(pair.prev.date)} – ${shortDate(pair.latest.date)})`:pair.latest?`(as of ${shortDate(pair.latest.date)})`:'';
+    g.textContent=`Follower Growth ${label}`;
+    p.textContent=`Follower Growth % ${label}`;
+  }
 }
 
 function fmt(n){if(n==null)return '—';if(n>=1000000)return (n/1000000).toFixed(2)+'M';if(n>=1000)return (n/1000).toFixed(1)+'K';return Number(n).toLocaleString();}
@@ -397,7 +398,8 @@ async function sendEmailNow(){
 function getFileDateStr(){const d=new Date();return `${d.toLocaleString('en-US',{month:'short'})}-${d.getDate()}-${d.getFullYear()}`;}
 
 function downloadCSV(){
-  const sorted=getSortedRoster(currentRosterTab==='my');let csv='Rank,Handle,Instagram URL,Followers,Follower Growth,Follower Growth %\n';
+  const sorted=getSortedRoster(currentRosterTab==='my').sort((a,b)=>(b._diff??-Infinity)-(a._diff??-Infinity));
+  let csv='Rank,Handle,Instagram URL,Followers,Follower Growth,Follower Growth %\n';
   sorted.forEach((r,idx)=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';csv+=`${idx+1},@${r.handle},https://www.instagram.com/${r.handle}/,${r.followers!=null?r.followers:''},${growth},${growthPct}\n`;});
   const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
 }
