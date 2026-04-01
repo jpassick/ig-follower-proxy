@@ -70,7 +70,7 @@
 <body>
 
 <div class="gate" id="password-gate">
-  <img src="/alamo-logo.png" class="gate-logo" alt="Alamo Records" />
+  <img src="/Alamo_Records.png" class="gate-logo" alt="Alamo Records" />
   <div class="gate-divider"></div>
   <div class="gate-card">
     <div class="gate-label">Instagram Follower Tracker</div>
@@ -82,7 +82,7 @@
 
 <div class="app" id="main-app" style="display:none;">
   <div class="app-header">
-    <img src="/alamo-logo.png" class="app-logo" alt="Alamo Records" />
+    <img src="/Alamo_Records.png" class="app-logo" alt="Alamo Records" />
     <h1>Instagram Follower Tracker <span class="view-badge" id="view-badge" style="display:none;">View only</span></h1>
   </div>
   <p class="subtitle">Alamo Records roster</p>
@@ -168,19 +168,23 @@ const savedAuth = sessionStorage.getItem('ig_auth');
 if (savedAuth==='admin') { isAdmin=true; showApp(); } else if (savedAuth==='viewer') { isAdmin=false; showApp(); }
 
 async function loadAll() { await Promise.all([loadRoster(), loadSnapshots()]); }
+
 async function loadRoster() {
   try { const res=await fetch('/api/roster'); const data=await res.json(); roster=data.roster||[]; renderRoster(); }
   catch(e) { roster=[]; renderRoster(); }
 }
+
 async function loadSnapshots() {
   try { const res=await fetch('/api/snapshots'); const data=await res.json(); snapshots=data.snapshots||[]; updateColumnHeaders(); }
   catch(e) { snapshots=[]; }
 }
+
 async function persistRoster() {
   const ind=document.getElementById('saving-indicator'); ind.style.display='inline';
   try { await fetch('/api/roster',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({roster})}); } catch(e) {}
   ind.style.display='none';
 }
+
 async function persistSnapshots() {
   try { await fetch('/api/snapshots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snapshots})}); } catch(e) {}
 }
@@ -215,6 +219,7 @@ function getLastSnap(handle) {
   for (let i=snapshots.length-1;i>=0;i--) { const e=snapshots[i].data.find(d=>d.handle===handle); if(e) return e.followers; }
   return null;
 }
+
 function sortBy(field) {
   if (currentSort.field===field) { currentSort.dir=currentSort.dir==='desc'?'asc':'desc'; }
   else { currentSort.field=field; currentSort.dir=(field==='followers'||field==='growth'||field==='pct')?'desc':'asc'; }
@@ -223,6 +228,7 @@ function sortBy(field) {
   const activeEl=document.getElementById('sort-'+field); if(activeEl){activeEl.textContent=arrow;activeEl.classList.add('active');}
   renderRoster();
 }
+
 function getSortedRoster() {
   return [...roster].map((r,i) => {
     const prev=getLastSnap(r.handle), diff=(r.followers!=null&&prev!=null)?r.followers-prev:null, p=(r.followers!=null&&prev!=null)?pct(r.followers,prev):null;
@@ -238,6 +244,7 @@ function getSortedRoster() {
     return 0;
   });
 }
+
 function renderRoster() {
   const tbody=document.getElementById('roster-body');
   if(!roster.length){tbody.innerHTML=`<tr><td colspan="${isAdmin?5:4}" class="muted" style="padding:12px 0;font-size:13px;">No handles added yet</td></tr>`;return;}
@@ -250,6 +257,7 @@ function renderRoster() {
     return `<tr><td><a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></td><td>${fc}</td><td>${r.status==='ok'?renderGrowth(r._diff):'<span class="muted">—</span>'}</td><td>${r.status==='ok'?renderPct(r._pct):'<span class="muted">—</span>'}</td>${removeBtn}</tr>`;
   }).join('');
 }
+
 async function fetchFollowers(handle) {
   const res=await fetch(`/api/followers?username=${encodeURIComponent(handle)}`);
   if(!res.ok) throw new Error(`Server error ${res.status}`);
@@ -257,7 +265,9 @@ async function fetchFollowers(handle) {
   if(data.follower_count==null) throw new Error('No count returned');
   return data.follower_count;
 }
+
 function showErr(msg) { const el=document.getElementById('err-box'); el.textContent=msg; el.style.display='block'; setTimeout(()=>{el.style.display='none';},7000); }
+
 async function addHandle() {
   const input=document.getElementById('add-input'), handle=input.value.trim().replace('@','').toLowerCase();
   if(!handle) return;
@@ -269,11 +279,14 @@ async function addHandle() {
   catch(e){entry.status='error';showErr('Error on @'+handle+': '+e.message);}
   renderRoster(); await persistRoster();
 }
+
 async function removeHandle(i) { roster.splice(i,1); renderRoster(); await persistRoster(); }
+
 async function refreshAll() {
   for(const r of roster){r.status='loading';renderRoster();try{r.followers=await fetchFollowers(r.handle);r.status='ok';}catch(e){r.status='error';}renderRoster();}
   await persistRoster();
 }
+
 async function saveSnapshot() {
   const valid=roster.filter(r=>r.followers!=null);
   if(!valid.length){showErr('No data yet.');return;}
@@ -281,17 +294,20 @@ async function saveSnapshot() {
   snapshots.push(snap); await persistSnapshots(); updateColumnHeaders(); renderReport();
   alert('Snapshot saved — '+snap.date);
 }
+
 async function sendEmailNow() {
   const btn=event.target; btn.textContent='Sending...'; btn.disabled=true;
   try{const res=await fetch('/api/send-email',{method:'POST'});const data=await res.json();if(data.ok)alert('Email sent!');else alert('Error: '+(data.error||'Unknown'));}
   catch(e){alert('Failed: '+e.message);}
   btn.textContent='✉ Send email update'; btn.disabled=false;
 }
+
 function downloadCSV() {
   const sorted=getSortedRoster(); let csv='Handle,Followers,Follower Growth,Follower Growth %\n';
   sorted.forEach(r=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';csv+=`@${r.handle},${r.followers!=null?r.followers:''},${growth},${growthPct}\n`;});
   const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='ig-follower-report.csv';a.click();URL.revokeObjectURL(url);
 }
+
 async function generateHighlights(latest,prev) {
   const box=document.getElementById('highlights-box'),content=document.getElementById('highlights-content');
   box.style.display='block'; content.innerHTML='<span style="color:#888;font-size:13px;">Generating highlights...</span>';
@@ -315,6 +331,7 @@ async function generateHighlights(latest,prev) {
     content.innerHTML='<ul>'+bullets.map(b=>`<li>${b}</li>`).join('')+'</ul>';
   }
 }
+
 function renderReport() {
   const el=document.getElementById('report-rows'),dateEl=document.getElementById('report-date');
   if(!snapshots.length){el.innerHTML='<div class="muted" style="font-size:13px;">No snapshots yet.</div>';return;}
@@ -323,6 +340,7 @@ function renderReport() {
   const sorted=[...latest.data].sort((a,b)=>b.followers-a.followers);
   el.innerHTML=sorted.map(d=>{const pe=prev?prev.data.find(p=>p.handle===d.handle):null;const p=pe?pct(d.followers,pe.followers):null;const diff=pe?d.followers-pe.followers:null;return `<div class="report-row"><span style="min-width:130px"><a class="handle-link" href="https://www.instagram.com/${d.handle}/" target="_blank">@${d.handle}</a></span><strong style="min-width:90px">${fmt(d.followers)}</strong><span>${diff!==null?`${renderGrowth(diff)} ${renderPct(p)}`:'<span class="muted">first entry</span>'}</span></div>`;}).join('');
 }
+
 function exportReport() {
   if(!snapshots.length){alert('No snapshot data yet.');return;}
   const latest=snapshots[snapshots.length-1],prev=snapshots.length>1?snapshots[snapshots.length-2]:null;
@@ -330,12 +348,14 @@ function exportReport() {
   [...latest.data].sort((a,b)=>b.followers-a.followers).forEach(d=>{const pe=prev?prev.data.find(p=>p.handle===d.handle):null;const p=pe?pct(d.followers,pe.followers):null;const diff=pe?d.followers-pe.followers:null;const ch=diff!==null?` | ${diff>=0?'+':''}${Number(diff).toLocaleString()} (${p!=null?(p>=0?'+':'')+p.toFixed(2)+'%':'—'})`:'  | first entry';txt+=`@${d.handle}: ${fmt(d.followers)}${ch}\n`;});
   navigator.clipboard.writeText(txt).then(()=>alert('Copied!')).catch(()=>alert(txt));
 }
+
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',['live','report'][i]===tab));
   document.getElementById('view-live').style.display=tab==='live'?'':'none';
   document.getElementById('view-report').style.display=tab==='report'?'':'none';
   if(tab==='report') renderReport();
 }
+
 document.getElementById('add-input').addEventListener('keydown',e=>{if(e.key==='Enter')addHandle();});
 </script>
 </body>
