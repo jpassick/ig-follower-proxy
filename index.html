@@ -19,7 +19,7 @@
   .gate-btn:hover { background: #333; }
   .gate-err { font-size: 12px; color: #c0392b; text-align: center; margin-top: 10px; display: none; }
   .gate-divider { width: 40px; height: 1px; background: #e0e0e0; margin: 0 auto 2rem; }
-  .app { padding: 2rem; max-width: 800px; margin: 0 auto; }
+  .app { padding: 2rem; max-width: 820px; margin: 0 auto; }
   .app-header { display: flex; align-items: center; gap: 14px; margin-bottom: 0.25rem; }
   .app-logo { height: 28px; opacity: 0.8; }
   h1 { font-size: 18px; font-weight: 600; }
@@ -33,6 +33,10 @@
   .roster-tabs { display: flex; gap: 6px; margin-bottom: 1rem; }
   .roster-tab { font-size: 12px; padding: 4px 12px; border-radius: 20px; cursor: pointer; border: 1px solid #ddd; background: transparent; color: #888; }
   .roster-tab.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .period-tabs { display: flex; gap: 4px; align-items: center; }
+  .period-tab { font-size: 11px; padding: 3px 10px; border-radius: 20px; cursor: pointer; border: 1px solid #ddd; background: transparent; color: #888; }
+  .period-tab.active { background: #f0f0f0; color: #1a1a1a; border-color: #bbb; font-weight: 500; }
+  .period-label { font-size: 11px; color: #bbb; margin-right: 4px; }
   .top-actions { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
   .add-row { display: flex; gap: 8px; margin-bottom: 1rem; }
   .add-row input { flex: 1; font-size: 14px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
@@ -71,7 +75,7 @@
   .highlights-content { font-size: 13px; color: #1a1a1a; line-height: 1.7; }
   .highlights-content ul { padding-left: 1.25rem; }
   .highlights-content li { margin-bottom: 4px; }
-  .actions { display: flex; gap: 8px; margin-top: 1.25rem; flex-wrap: wrap; align-items: center; }
+  .actions { display: flex; gap: 8px; margin-top: 1.25rem; }
   .rank { font-size: 12px; color: #bbb; font-weight: 500; min-width: 20px; }
   .star-btn { background: none; border: none; cursor: pointer; padding: 0 4px 0 0; font-size: 15px; color: #ddd; line-height: 1; }
   .star-btn.starred { color: #f0b429; }
@@ -123,9 +127,18 @@
       <button class="secondary" onclick="downloadPDF()">↓ Download PDF</button>
     </div>
     <div class="progress-bar" id="progress-bar"><div class="progress-bar-fill" id="progress-fill"></div></div>
-    <div class="roster-tabs">
-      <button class="roster-tab active" onclick="switchRosterTab('all')">Full roster</button>
-      <button class="roster-tab" onclick="switchRosterTab('my')">My roster</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
+      <div class="roster-tabs">
+        <button class="roster-tab active" onclick="switchRosterTab('all')">Full roster</button>
+        <button class="roster-tab" onclick="switchRosterTab('my')">My roster</button>
+      </div>
+      <div class="period-tabs">
+        <span class="period-label">Growth period:</span>
+        <button class="period-tab active" onclick="setPeriod(1)" id="period-1">Latest</button>
+        <button class="period-tab" onclick="setPeriod(7)" id="period-7">7 days</button>
+        <button class="period-tab" onclick="setPeriod(14)" id="period-14">14 days</button>
+        <button class="period-tab" onclick="setPeriod(30)" id="period-30">30 days</button>
+      </div>
     </div>
     <div class="add-row" id="add-row-el">
       <input type="text" id="add-input" placeholder="Instagram handle, e.g. rodwave" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
@@ -151,7 +164,7 @@
   <div id="view-report" style="display:none;">
     <div class="highlights-box" id="highlights-box" style="display:none;">
       <div class="highlights-title">Weekly Highlights</div>
-      <div class="highlights-content" id="highlights-content"><span style="color:#888;font-size:13px;">Generating highlights...</span></div>
+      <div class="highlights-content" id="highlights-content"></div>
     </div>
     <div class="report-box">
       <div class="report-header">
@@ -182,12 +195,13 @@ const ADMIN_PASSWORD = 'AlamoRec0rds$';
 const VIEW_PASSWORD = '25Madison';
 const STARRED_KEY = 'ig_starred_v1';
 let roster = [], snapshots = [], currentSort = { field: 'followers', dir: 'desc' }, isAdmin = false;
-let currentRosterTab = 'all';
+let currentRosterTab = 'all', currentPeriod = 1;
 let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
 
 function saveStarred() { localStorage.setItem(STARRED_KEY, JSON.stringify([...starred])); }
 function toggleStar(handle) { if(starred.has(handle)) starred.delete(handle); else starred.add(handle); saveStarred(); renderRoster(); }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function proxyUrl(url) { if(!url) return ''; return `/api/proxy-image?url=${encodeURIComponent(url)}`; }
 
 function checkPassword() {
   const val = document.getElementById('pw-input').value;
@@ -208,7 +222,7 @@ function showApp() {
   loadAll();
 }
 
-document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key==='Enter') checkPassword(); });
+document.getElementById('pw-input').addEventListener('keydown', e => { if(e.key==='Enter') checkPassword(); });
 const savedAuth = sessionStorage.getItem('ig_auth');
 if (savedAuth==='admin') { isAdmin=true; showApp(); } else if (savedAuth==='viewer') { isAdmin=false; showApp(); }
 
@@ -225,13 +239,11 @@ async function loadSnapshots() {
 }
 
 function updateLastUpdated() {
-  const el = document.getElementById('last-updated');
-  if (!roster.length) { el.textContent=''; return; }
-  const timestamps = roster.filter(r=>r.updatedAt).map(r=>r.updatedAt);
-  if (!timestamps.length) { el.textContent=''; return; }
-  const latest = Math.max(...timestamps);
-  const d = new Date(latest);
-  el.textContent = `Last updated: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
+  const el=document.getElementById('last-updated');
+  const timestamps=roster.filter(r=>r.updatedAt).map(r=>r.updatedAt);
+  if(!timestamps.length){el.textContent='';return;}
+  const d=new Date(Math.max(...timestamps));
+  el.textContent=`Last updated: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
 }
 
 async function persistRoster() {
@@ -244,88 +256,76 @@ async function persistSnapshots() {
   try { await fetch('/api/snapshots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snapshots})}); } catch(e) {}
 }
 
-function shortDate(dateStr) { const d=new Date(dateStr); if(isNaN(d)) return dateStr; return `${d.getMonth()+1}/${d.getDate()}`; }
-
-function getDateRange() {
-  if (snapshots.length===0) return null;
-  if (snapshots.length===1) return { from: shortDate(snapshots[0].date), single: true };
-  const latest=snapshots[snapshots.length-1], prev=snapshots[snapshots.length-2];
-  return { from: shortDate(prev.date), to: shortDate(latest.date), single: false };
+function setPeriod(days) {
+  currentPeriod=days;
+  document.querySelectorAll('.period-tab').forEach(el=>el.classList.remove('active'));
+  const map={1:'period-1',7:'period-7',14:'period-14',30:'period-30'};
+  const el=document.getElementById(map[days]); if(el) el.classList.add('active');
+  updateColumnHeaders(); renderRoster();
 }
 
+function getSnapshotPair() {
+  if(!snapshots.length) return null;
+  const latest=snapshots[snapshots.length-1];
+  if(currentPeriod===1) return { latest, prev: snapshots.length>1?snapshots[snapshots.length-2]:null };
+  const cutoff=latest.ts-(currentPeriod*24*60*60*1000);
+  let best=null;
+  for(let i=snapshots.length-2;i>=0;i--) { if(snapshots[i].ts<=cutoff){best=snapshots[i];break;} best=snapshots[i]; }
+  return { latest, prev: best };
+}
+
+function shortDate(dateStr){const d=new Date(dateStr);if(isNaN(d))return dateStr;return `${d.getMonth()+1}/${d.getDate()}`;}
+
 function updateColumnHeaders() {
-  const range=getDateRange();
-  const growthEl=document.getElementById('th-growth'), pctEl=document.getElementById('th-pct');
-  if (range && growthEl && pctEl) {
-    const label=range.single?`(as of ${range.from})`:`(${range.from} – ${range.to})`;
-    growthEl.innerHTML=`Follower Growth <small style="font-weight:400;color:#bbb;font-size:11px;">${label}</small> <span class="sort-arrow" id="sort-growth">↕</span>`;
-    pctEl.innerHTML=`Follower Growth % <small style="font-weight:400;color:#bbb;font-size:11px;">${label}</small> <span class="sort-arrow" id="sort-pct">↕</span>`;
+  const pair=getSnapshotPair();
+  const ge=document.getElementById('th-growth'),pe=document.getElementById('th-pct');
+  if(ge&&pe){
+    const label=pair&&pair.prev?`(${shortDate(pair.prev.date)} – ${shortDate(pair.latest.date)})`:pair&&pair.latest?`(as of ${shortDate(pair.latest.date)})`:'';
+    if(label){
+      ge.innerHTML=`Follower Growth <small style="font-weight:400;color:#bbb;font-size:11px;">${label}</small> <span class="sort-arrow" id="sort-growth">↕</span>`;
+      pe.innerHTML=`Follower Growth % <small style="font-weight:400;color:#bbb;font-size:11px;">${label}</small> <span class="sort-arrow" id="sort-pct">↕</span>`;
+    }
   }
   updateReportHeaders();
 }
 
-function updateReportHeaders() {
-  const range=getDateRange();
-  const g=document.getElementById('report-th-growth'), p=document.getElementById('report-th-pct');
-  if (range && g && p) {
-    const label=range.single?`(as of ${range.from})`:`(${range.from} – ${range.to})`;
-    g.textContent=`Follower Growth ${label}`; p.textContent=`Follower Growth % ${label}`;
-  }
+function updateReportHeaders(){
+  const pair=getSnapshotPair();
+  const g=document.getElementById('report-th-growth'),p=document.getElementById('report-th-pct');
+  if(pair&&g&&p){const label=pair.prev?`(${shortDate(pair.prev.date)} – ${shortDate(pair.latest.date)})`:pair.latest?`(as of ${shortDate(pair.latest.date)})`:'';g.textContent=`Follower Growth ${label}`;p.textContent=`Follower Growth % ${label}`;}
 }
 
-function fmt(n) { if(n==null) return '—'; if(n>=1000000) return (n/1000000).toFixed(2)+'M'; if(n>=1000) return (n/1000).toFixed(1)+'K'; return Number(n).toLocaleString(); }
-function pct(cur,prev) { if(!prev) return null; return (cur-prev)/prev*100; }
-function renderPct(p) {
-  if(p===null) return '<span class="muted">—</span>';
-  const sign=p>0?'+':'', cls=p>0?'up':p<0?'down':'muted', arrow=p>0?'▲':p<0?'▼':'–';
-  return `<span class="${cls}">${arrow} ${sign}${p.toFixed(2)}%</span>`;
-}
-function renderGrowth(diff) {
-  if(diff===null) return '<span class="muted">—</span>';
-  const cls=diff>0?'up':diff<0?'down':'muted', sign=diff>0?'+':'';
-  return `<span class="${cls}">${sign}${Number(diff).toLocaleString()}</span>`;
-}
-function getLastSnap(handle) {
-  for(let i=snapshots.length-1;i>=0;i--) { const e=snapshots[i].data.find(d=>d.handle===handle); if(e) return e.followers; }
-  return null;
+function fmt(n){if(n==null)return '—';if(n>=1000000)return (n/1000000).toFixed(2)+'M';if(n>=1000)return (n/1000).toFixed(1)+'K';return Number(n).toLocaleString();}
+function pct(cur,prev){if(!prev)return null;return(cur-prev)/prev*100;}
+function renderPct(p){if(p===null)return '<span class="muted">—</span>';const sign=p>0?'+':'',cls=p>0?'up':p<0?'down':'muted',arrow=p>0?'▲':p<0?'▼':'–';return `<span class="${cls}">${arrow} ${sign}${p.toFixed(2)}%</span>`;}
+function renderGrowth(diff){if(diff===null)return '<span class="muted">—</span>';const cls=diff>0?'up':diff<0?'down':'muted',sign=diff>0?'+':'';return `<span class="${cls}">${sign}${Number(diff).toLocaleString()}</span>`;}
+
+function getSnapVal(handle){
+  const pair=getSnapshotPair(); if(!pair) return null;
+  const e=pair.prev?pair.prev.data.find(d=>d.handle===handle):null;
+  return e?e.followers:null;
 }
 
-function switchRosterTab(tab) {
-  currentRosterTab=tab;
-  document.querySelectorAll('.roster-tab').forEach((el,i)=>el.classList.toggle('active',['all','my'][i]===tab));
-  renderRoster();
-}
+function switchRosterTab(tab){currentRosterTab=tab;document.querySelectorAll('.roster-tab').forEach((el,i)=>el.classList.toggle('active',['all','my'][i]===tab));renderRoster();}
 
-function sortBy(field) {
+function sortBy(field){
   if(currentSort.field===field){currentSort.dir=currentSort.dir==='desc'?'asc':'desc';}
   else{currentSort.field=field;currentSort.dir=(field==='followers'||field==='growth'||field==='pct')?'desc':'asc';}
   ['handle','followers','growth','pct'].forEach(f=>{const el=document.getElementById('sort-'+f);if(el){el.textContent='↕';el.classList.remove('active');}});
   const arrow=currentSort.dir==='desc'?'▼':'▲';
-  const activeEl=document.getElementById('sort-'+field); if(activeEl){activeEl.textContent=arrow;activeEl.classList.add('active');}
+  const ae=document.getElementById('sort-'+field);if(ae){ae.textContent=arrow;ae.classList.add('active');}
   renderRoster();
 }
 
-function getSortedRoster(filterStarred=false) {
-  let list=[...roster].map((r,i)=>{
-    const prev=getLastSnap(r.handle),diff=(r.followers!=null&&prev!=null)?r.followers-prev:null,p=(r.followers!=null&&prev!=null)?pct(r.followers,prev):null;
-    return {...r,_origIndex:i,_diff:diff,_pct:p};
-  });
+function getSortedRoster(filterStarred=false){
+  let list=[...roster].map((r,i)=>{const prev=getSnapVal(r.handle),diff=(r.followers!=null&&prev!=null)?r.followers-prev:null,p=(r.followers!=null&&prev!=null)?pct(r.followers,prev):null;return{...r,_origIndex:i,_diff:diff,_pct:p};});
   if(filterStarred) list=list.filter(r=>starred.has(r.handle));
-  return list.sort((a,b)=>{
-    let av,bv;
-    if(currentSort.field==='followers'){av=a.followers||0;bv=b.followers||0;}
-    else if(currentSort.field==='growth'){av=a._diff??-Infinity;bv=b._diff??-Infinity;}
-    else if(currentSort.field==='pct'){av=a._pct??-Infinity;bv=b._pct??-Infinity;}
-    else{av=a.handle||'';bv=b.handle||'';}
-    if(av<bv) return currentSort.dir==='asc'?-1:1;
-    if(av>bv) return currentSort.dir==='asc'?1:-1;
-    return 0;
-  });
+  return list.sort((a,b)=>{let av,bv;if(currentSort.field==='followers'){av=a.followers||0;bv=b.followers||0;}else if(currentSort.field==='growth'){av=a._diff??-Infinity;bv=b._diff??-Infinity;}else if(currentSort.field==='pct'){av=a._pct??-Infinity;bv=b._pct??-Infinity;}else{av=a.handle||'';bv=b.handle||'';}if(av<bv)return currentSort.dir==='asc'?-1:1;if(av>bv)return currentSort.dir==='asc'?1:-1;return 0;});
 }
 
-function renderRoster() {
+function renderRoster(){
   const tbody=document.getElementById('roster-body');
-  const isMyRoster=currentRosterTab==='my', sorted=getSortedRoster(isMyRoster), cols=isAdmin?7:6;
+  const isMyRoster=currentRosterTab==='my',sorted=getSortedRoster(isMyRoster),cols=isAdmin?7:6;
   if(!roster.length){tbody.innerHTML=`<tr><td colspan="${cols}" class="muted" style="padding:12px 0;font-size:13px;">No handles added yet</td></tr>`;return;}
   if(isMyRoster&&sorted.length===0){tbody.innerHTML=`<tr><td colspan="${cols}" style="padding:12px 0;font-size:13px;color:#aaa;">No starred artists yet — click ☆ next to any artist to add them here.</td></tr>`;return;}
   tbody.innerHTML=sorted.map((r,rankIdx)=>{
@@ -333,122 +333,110 @@ function renderRoster() {
     const fc=r.status==='loading'?'<span class="muted">fetching...</span>':r.status==='error'?'<span class="pill-err">error</span>':`<strong>${fmt(r.followers)}</strong>`;
     const igUrl=`https://www.instagram.com/${r.handle}/`;
     const isStarred=starred.has(r.handle);
-    const picUrl=r.profilePic||'';
-    const avatarHtml=picUrl?`<img src="${picUrl}" class="avatar" alt="" onerror="this.style.display='none'" />`:`<span class="avatar-placeholder"></span>`;
+    const picUrl=r.profilePic?proxyUrl(r.profilePic):'';
+    const avatarHtml=picUrl?`<img src="${picUrl}" class="avatar" alt="" onerror="this.outerHTML='<span class=\\'avatar-placeholder\\'></span>'" />`:`<span class="avatar-placeholder"></span>`;
     const removeBtn=isAdmin?`<td style="text-align:right"><button class="danger" onclick="removeHandle(${i})">✕</button></td>`:'';
-    return `<tr>
-      <td><span class="rank">${rankIdx+1}</span></td>
-      <td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td>
-      <td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></div></td>
-      <td>${fc}</td>
-      <td>${r.status==='ok'?renderGrowth(r._diff):'<span class="muted">—</span>'}</td>
-      <td>${r.status==='ok'?renderPct(r._pct):'<span class="muted">—</span>'}</td>
-      ${removeBtn}
-    </tr>`;
+    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></div></td><td>${fc}</td><td>${r.status==='ok'?renderGrowth(r._diff):'<span class="muted">—</span>'}</td><td>${r.status==='ok'?renderPct(r._pct):'<span class="muted">—</span>'}</td>${removeBtn}</tr>`;
   }).join('');
 }
 
-async function fetchFollowers(handle) {
+async function fetchFollowers(handle){
   const res=await fetch(`/api/followers?username=${encodeURIComponent(handle)}`);
   if(!res.ok) throw new Error(`Server error ${res.status}`);
-  const data=await res.json(); if(data.error) throw new Error(data.error);
-  if(data.follower_count==null) throw new Error('No count returned');
-  return { follower_count: data.follower_count, profile_pic_url: data.profile_pic_url||'' };
+  const data=await res.json();if(data.error)throw new Error(data.error);
+  if(data.follower_count==null)throw new Error('No count returned');
+  return{follower_count:data.follower_count,profile_pic_url:data.profile_pic_url||''};
 }
 
 function showErr(msg){const el=document.getElementById('err-box');el.textContent=msg;el.style.display='block';setTimeout(()=>{el.style.display='none';},7000);}
 
-async function addHandle() {
+async function addHandle(){
   const input=document.getElementById('add-input'),handle=input.value.trim().replace('@','').toLowerCase();
-  if(!handle) return;
+  if(!handle)return;
   if(roster.find(r=>r.handle===handle)){showErr('@'+handle+' already in roster.');return;}
   input.value='';
-  const entry={handle:handle,followers:null,status:'loading',profilePic:''};
-  roster.push(entry); renderRoster();
-  try{
-    const result=await fetchFollowers(handle);
-    entry.followers=result.follower_count; entry.profilePic=result.profile_pic_url;
-    entry.status='ok'; entry.updatedAt=Date.now();
-  }catch(e){entry.status='error';showErr('Error on @'+handle+': '+e.message);}
-  renderRoster(); updateLastUpdated(); await persistRoster();
+  const entry={handle,followers:null,status:'loading',profilePic:''};
+  roster.push(entry);renderRoster();
+  try{const result=await fetchFollowers(handle);entry.followers=result.follower_count;entry.profilePic=result.profile_pic_url;entry.status='ok';entry.updatedAt=Date.now();}
+  catch(e){entry.status='error';showErr('Error on @'+handle+': '+e.message);}
+  renderRoster();updateLastUpdated();await persistRoster();
 }
 
 async function removeHandle(i){roster.splice(i,1);renderRoster();await persistRoster();}
 
-async function refreshAll() {
+async function refreshAll(){
   const btn=document.getElementById('refresh-btn'),pb=document.getElementById('progress-bar'),pf=document.getElementById('progress-fill');
-  btn.disabled=true; btn.textContent='Refreshing...'; pb.style.display='block'; pf.style.width='0%';
+  btn.disabled=true;btn.textContent='Refreshing...';pb.style.display='block';pf.style.width='0%';
   const total=roster.length;
   for(let idx=0;idx<total;idx++){
-    const r=roster[idx]; r.status='loading'; renderRoster();
-    try{
-      const result=await fetchFollowers(r.handle);
-      r.followers=result.follower_count; if(result.profile_pic_url) r.profilePic=result.profile_pic_url;
-      r.status='ok'; r.updatedAt=Date.now();
-    }catch(e){r.status='error';}
-    renderRoster(); pf.style.width=`${Math.round((idx+1)/total*100)}%`;
-    if(idx<total-1) await sleep(1100);
+    const r=roster[idx];r.status='loading';renderRoster();
+    try{const result=await fetchFollowers(r.handle);r.followers=result.follower_count;if(result.profile_pic_url)r.profilePic=result.profile_pic_url;r.status='ok';r.updatedAt=Date.now();}
+    catch(e){r.status='error';}
+    renderRoster();pf.style.width=`${Math.round((idx+1)/total*100)}%`;
+    if(idx<total-1)await sleep(1100);
   }
-  pb.style.display='none'; btn.disabled=false; btn.textContent='↻ Refresh all';
-  updateLastUpdated(); await persistRoster();
+  pb.style.display='none';btn.disabled=false;btn.textContent='↻ Refresh all';
+  updateLastUpdated();await persistRoster();
 }
 
-async function saveSnapshot() {
+async function saveSnapshot(){
   const valid=roster.filter(r=>r.followers!=null);
   if(!valid.length){showErr('No data yet.');return;}
   const snap={date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),ts:Date.now(),data:valid.map(r=>({handle:r.handle,followers:r.followers}))};
-  snapshots.push(snap); await persistSnapshots(); updateColumnHeaders(); renderReport();
+  snapshots.push(snap);await persistSnapshots();updateColumnHeaders();renderReport();
   alert('Snapshot saved — '+snap.date);
 }
 
-async function sendEmailNow() {
-  const btn=event.target; btn.textContent='Sending...'; btn.disabled=true;
+async function sendEmailNow(){
+  const btn=event.target;btn.textContent='Sending...';btn.disabled=true;
   try{const res=await fetch('/api/send-email',{method:'POST'});const data=await res.json();if(data.ok)alert('Email sent!');else alert('Error: '+(data.error||'Unknown'));}
   catch(e){alert('Failed: '+e.message);}
-  btn.textContent='✉ Send email update'; btn.disabled=false;
+  btn.textContent='✉ Send email update';btn.disabled=false;
 }
 
-function getCSVFilename(){const d=new Date();return `Alamo-Santa-Anna-Instagram-Report-${d.toLocaleString('en-US',{month:'short'})}-${d.getDate()}-${d.getFullYear()}.csv`;}
+function getFileDateStr(){const d=new Date();return `${d.toLocaleString('en-US',{month:'short'})}-${d.getDate()}-${d.getFullYear()}`;}
 
 function downloadCSV(){
-  const sorted=getSortedRoster(currentRosterTab==='my'); let csv='Rank,Handle,Instagram URL,Followers,Follower Growth,Follower Growth %\n';
+  const sorted=getSortedRoster(currentRosterTab==='my');let csv='Rank,Handle,Instagram URL,Followers,Follower Growth,Follower Growth %\n';
   sorted.forEach((r,idx)=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';csv+=`${idx+1},@${r.handle},https://www.instagram.com/${r.handle}/,${r.followers!=null?r.followers:''},${growth},${growthPct}\n`;});
-  const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=getCSVFilename();a.click();URL.revokeObjectURL(url);
+  const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
 }
 
 function downloadPDF(){
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
+  const{jsPDF}=window.jspdf;const doc=new jsPDF();
   const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  const range=getDateRange();
-  const rangeLabel=range?(range.single?`as of ${range.from}`:`${range.from} – ${range.to}`):'';
+  const pair=getSnapshotPair();
+  const rangeLabel=pair&&pair.prev?`${shortDate(pair.prev.date)} – ${shortDate(pair.latest.date)}`:pair&&pair.latest?`as of ${shortDate(pair.latest.date)}`:'';
   const sorted=getSortedRoster(currentRosterTab==='my');
-  doc.setFontSize(16); doc.setFont('helvetica','bold');
-  doc.text('Instagram Follower Report', 14, 20);
-  doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(120);
-  doc.text(`Alamo Records / Santa Anna Roster — ${today}`, 14, 28);
-  doc.setTextColor(0);
+  doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('Instagram Follower Report',14,20);
+  doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(120);
+  doc.text(`Alamo Records / Santa Anna Roster — ${today}`,14,28);doc.setTextColor(0);
   const tableData=sorted.map((r,idx)=>{
     const growth=r._diff!==null?(r._diff>=0?'+':'')+Number(r._diff).toLocaleString():'—';
     const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'—';
-    return [idx+1, `@${r.handle}`, fmt(r.followers), growth, growthPct];
+    return[idx+1,`@${r.handle}`,`instagram.com/${r.handle}`,fmt(r.followers),growth,growthPct];
   });
   doc.autoTable({
     startY:34,
-    head:[['#','Handle','Followers',`Growth ${rangeLabel}`,`Growth % ${rangeLabel}`]],
+    head:[['#','Handle','Instagram URL','Followers',`Growth ${rangeLabel}`,`Growth % ${rangeLabel}`]],
     body:tableData,
-    styles:{fontSize:10,cellPadding:4},
+    styles:{fontSize:9,cellPadding:3},
     headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},
     alternateRowStyles:{fillColor:[249,249,247]},
-    columnStyles:{0:{cellWidth:12},1:{cellWidth:50},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:45}}
+    columnStyles:{0:{cellWidth:10},1:{cellWidth:38},2:{cellWidth:48},3:{cellWidth:28},4:{cellWidth:30},5:{cellWidth:30}},
+    didDrawCell:(data)=>{
+      if(data.section==='body'&&data.column.index===2){
+        const handle=sorted[data.row.index]?.handle;
+        if(handle) doc.link(data.cell.x,data.cell.y,data.cell.width,data.cell.height,{url:`https://www.instagram.com/${handle}/`});
+      }
+    }
   });
-  const filename=`Alamo-Santa-Anna-Instagram-Report-${new Date().toLocaleString('en-US',{month:'short'})}-${new Date().getDate()}-${new Date().getFullYear()}.pdf`;
-  doc.save(filename);
+  doc.save(`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.pdf`);
 }
 
 async function generateHighlights(latest,prev){
   const box=document.getElementById('highlights-box'),content=document.getElementById('highlights-content');
-  box.style.display='block'; content.innerHTML='<span style="color:#888;font-size:13px;">Generating highlights...</span>';
+  box.style.display='block';content.innerHTML='<span style="color:#888;font-size:13px;">Generating highlights...</span>';
   if(!prev){content.innerHTML='<ul><li>This is the first snapshot — growth data will appear after the next refresh.</li></ul>';return;}
   const changes=latest.data.map(d=>{const pe=prev.data.find(p=>p.handle===d.handle);const diff=pe?d.followers-pe.followers:null;const p=pe?((d.followers-pe.followers)/pe.followers*100):null;return{handle:d.handle,followers:d.followers,diff,pct:p};}).filter(d=>d.diff!==null);
   const sorted=[...changes].sort((a,b)=>b.diff-a.diff);
@@ -463,9 +451,9 @@ async function generateHighlights(latest,prev){
   }catch(e){
     const bullets=[];
     bullets.push(`${gainers} out of ${latest.data.length} artists gained followers this week, while ${losers} saw a decline.`);
-    if(biggestGainer?.diff>0) bullets.push(`Biggest gainer: @${biggestGainer.handle} added ${biggestGainer.diff.toLocaleString()} followers (+${biggestGainer.pct.toFixed(2)}%).`);
-    if(biggestDrop?.diff<0) bullets.push(`Biggest drop: @${biggestDrop.handle} lost ${Math.abs(biggestDrop.diff).toLocaleString()} followers (${biggestDrop.pct.toFixed(2)}%).`);
-    if(milestones.length>0) bullets.push(`Milestone: ${milestones.map(m=>'@'+m.handle).join(', ')} crossed a major follower threshold.`);
+    if(biggestGainer?.diff>0)bullets.push(`Biggest gainer: @${biggestGainer.handle} added ${biggestGainer.diff.toLocaleString()} followers (+${biggestGainer.pct.toFixed(2)}%).`);
+    if(biggestDrop?.diff<0)bullets.push(`Biggest drop: @${biggestDrop.handle} lost ${Math.abs(biggestDrop.diff).toLocaleString()} followers (${biggestDrop.pct.toFixed(2)}%).`);
+    if(milestones.length>0)bullets.push(`Milestone: ${milestones.map(m=>'@'+m.handle).join(', ')} crossed a major follower threshold.`);
     content.innerHTML='<ul>'+bullets.map(b=>`<li>${b}</li>`).join('')+'</ul>';
   }
 }
@@ -474,14 +462,13 @@ function renderReport(){
   const tbody=document.getElementById('report-rows'),dateEl=document.getElementById('report-date');
   if(!snapshots.length){tbody.innerHTML='<tr><td colspan="5" class="muted" style="font-size:13px;padding:12px 0;">No snapshots yet.</td></tr>';return;}
   const latest=snapshots[snapshots.length-1],prev=snapshots.length>1?snapshots[snapshots.length-2]:null;
-  dateEl.textContent=latest.date; generateHighlights(latest,prev); updateReportHeaders();
+  dateEl.textContent=latest.date;generateHighlights(latest,prev);updateReportHeaders();
   const sorted=[...latest.data].sort((a,b)=>b.followers-a.followers);
   tbody.innerHTML=sorted.map((d,idx)=>{
     const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
-    const p=pe?pct(d.followers,pe.followers):null;
-    const diff=pe?d.followers-pe.followers:null;
+    const p=pe?pct(d.followers,pe.followers):null;const diff=pe?d.followers-pe.followers:null;
     const rEntry=roster.find(r=>r.handle===d.handle);
-    const picUrl=rEntry?.profilePic||'';
+    const picUrl=rEntry?.profilePic?proxyUrl(rEntry.profilePic):'';
     const avatarHtml=picUrl?`<img src="${picUrl}" class="avatar" alt="" style="width:24px;height:24px;" onerror="this.style.display='none'" />`:'';
     return `<tr><td style="color:#bbb;font-size:12px;">${idx+1}</td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="https://www.instagram.com/${d.handle}/" target="_blank">@${d.handle}</a></div></td><td><strong>${fmt(d.followers)}</strong></td><td>${diff!==null?renderGrowth(diff):'<span class="muted">first entry</span>'}</td><td>${diff!==null?renderPct(p):'<span class="muted">—</span>'}</td></tr>`;
   }).join('');
