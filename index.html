@@ -9,7 +9,8 @@
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9f9f7; color: #1a1a1a; padding: 2rem; }
   .container { max-width: 760px; margin: 0 auto; }
   h1 { font-size: 20px; font-weight: 600; margin-bottom: 0.25rem; }
-  .subtitle { font-size: 13px; color: #888; margin-bottom: 1.5rem; }
+  .subtitle { font-size: 13px; color: #888; margin-bottom: 0.25rem; }
+  .refresh-note { font-size: 12px; color: #aaa; margin-bottom: 1.5rem; }
   .tabs { display: flex; gap: 6px; margin-bottom: 1.5rem; }
   .tab { font-size: 13px; padding: 6px 16px; border-radius: 20px; cursor: pointer; border: 1px solid #ddd; background: transparent; color: #666; }
   .tab.active { background: #fff; color: #1a1a1a; border-color: #999; font-weight: 500; }
@@ -68,6 +69,7 @@
 <div class="container" id="main-app" style="display:none;">
   <h1>Instagram Follower Tracker</h1>
   <p class="subtitle">Alamo Records roster</p>
+  <p class="refresh-note">** Refreshes every Monday and Friday at 10:00 AM EST</p>
   <div class="tabs">
     <button class="tab active" onclick="switchTab('live')">Live lookup</button>
     <button class="tab" onclick="switchTab('report')">Weekly report</button>
@@ -88,11 +90,11 @@
     <table>
       <thead>
         <tr>
-          <th style="width:30%" onclick="sortBy('handle')">Handle <span class="sort-arrow" id="sort-handle"></span></th>
-          <th style="width:22%" onclick="sortBy('followers')">Followers <span class="sort-arrow" id="sort-followers">▼</span></th>
-          <th style="width:20%">Follower Growth</th>
-          <th style="width:18%">Follower Growth %</th>
-          <th style="width:10%"></th>
+          <th style="width:28%" onclick="sortBy('handle')">Handle <span class="sort-arrow" id="sort-handle"></span></th>
+          <th style="width:20%" onclick="sortBy('followers')">Followers <span class="sort-arrow" id="sort-followers">▼</span></th>
+          <th style="width:18%" onclick="sortBy('growth')">Follower Growth <span class="sort-arrow" id="sort-growth"></span></th>
+          <th style="width:18%" onclick="sortBy('pct')">Follower Growth % <span class="sort-arrow" id="sort-pct"></span></th>
+          <th style="width:16%"></th>
         </tr>
       </thead>
       <tbody id="roster-body"></tbody>
@@ -114,7 +116,6 @@
 
 <script>
 const PASSWORD = 'AlamoRec0rds$';
-const SNAP_KEY = 'ig_snaps_v1';
 let roster = [];
 let snapshots = [];
 let currentSort = { field: 'followers', dir: 'desc' };
@@ -216,23 +217,28 @@ function sortBy(field) {
     currentSort.dir = currentSort.dir === 'desc' ? 'asc' : 'desc';
   } else {
     currentSort.field = field;
-    currentSort.dir = field === 'followers' ? 'desc' : 'asc';
+    currentSort.dir = (field === 'followers' || field === 'growth' || field === 'pct') ? 'desc' : 'asc';
   }
-  document.getElementById('sort-handle').textContent = '';
-  document.getElementById('sort-followers').textContent = '';
+  ['handle','followers','growth','pct'].forEach(f => {
+    document.getElementById('sort-' + f).textContent = '';
+  });
   const arrow = currentSort.dir === 'desc' ? '▼' : '▲';
   document.getElementById('sort-' + field).textContent = arrow;
   renderRoster();
 }
 
 function getSortedRoster() {
-  return [...roster].map((r, i) => ({ ...r, _origIndex: i })).sort((a, b) => {
+  return [...roster].map((r, i) => {
+    const prev = getLastSnap(r.handle);
+    const diff = (r.followers != null && prev != null) ? r.followers - prev : null;
+    const p = (r.followers != null && prev != null) ? pct(r.followers, prev) : null;
+    return { ...r, _origIndex: i, _diff: diff, _pct: p };
+  }).sort((a, b) => {
     let av, bv;
-    if (currentSort.field === 'followers') {
-      av = a.followers || 0; bv = b.followers || 0;
-    } else {
-      av = a.handle || ''; bv = b.handle || '';
-    }
+    if (currentSort.field === 'followers') { av = a.followers || 0; bv = b.followers || 0; }
+    else if (currentSort.field === 'growth') { av = a._diff ?? -Infinity; bv = b._diff ?? -Infinity; }
+    else if (currentSort.field === 'pct') { av = a._pct ?? -Infinity; bv = b._pct ?? -Infinity; }
+    else { av = a.handle || ''; bv = b.handle || ''; }
     if (av < bv) return currentSort.dir === 'asc' ? -1 : 1;
     if (av > bv) return currentSort.dir === 'asc' ? 1 : -1;
     return 0;
@@ -245,9 +251,6 @@ function renderRoster() {
   const sorted = getSortedRoster();
   tbody.innerHTML = sorted.map(r => {
     const i = r._origIndex;
-    const prev = getLastSnap(r.handle);
-    const p = (r.followers != null && prev != null) ? pct(r.followers, prev) : null;
-    const diff = (r.followers != null && prev != null) ? r.followers - prev : null;
     const fc = r.status === 'loading' ? '<span class="muted">fetching...</span>'
       : r.status === 'error' ? '<span class="pill-err">error</span>'
       : `<strong>${fmt(r.followers)}</strong>`;
@@ -255,8 +258,8 @@ function renderRoster() {
     return `<tr>
       <td><a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></td>
       <td>${fc}</td>
-      <td>${r.status === 'ok' ? renderGrowth(diff) : '<span class="muted">—</span>'}</td>
-      <td>${r.status === 'ok' ? renderPct(p) : '<span class="muted">—</span>'}</td>
+      <td>${r.status === 'ok' ? renderGrowth(r._diff) : '<span class="muted">—</span>'}</td>
+      <td>${r.status === 'ok' ? renderPct(r._pct) : '<span class="muted">—</span>'}</td>
       <td style="text-align:right"><button class="danger" onclick="removeHandle(${i})">✕</button></td>
     </tr>`;
   }).join('');
@@ -320,11 +323,8 @@ function downloadCSV() {
   const sorted = getSortedRoster();
   let csv = 'Handle,Followers,Follower Growth,Follower Growth %\n';
   sorted.forEach(r => {
-    const prev = getLastSnap(r.handle);
-    const diff = (r.followers != null && prev != null) ? r.followers - prev : null;
-    const p = (r.followers != null && prev != null) ? pct(r.followers, prev) : null;
-    const growth = diff !== null ? (diff >= 0 ? '+' : '') + diff : '';
-    const growthPct = p !== null ? (p >= 0 ? '+' : '') + p.toFixed(2) + '%' : '';
+    const growth = r._diff !== null ? (r._diff >= 0 ? '+' : '') + r._diff : '';
+    const growthPct = r._pct !== null ? (r._pct >= 0 ? '+' : '') + r._pct.toFixed(2) + '%' : '';
     csv += `@${r.handle},${r.followers != null ? r.followers : ''},${growth},${growthPct}\n`;
   });
   const blob = new Blob([csv], { type: 'text/csv' });
