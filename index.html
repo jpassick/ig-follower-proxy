@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Alamo Records / Santa Anna — IG Tracker</title>
+<title>Alamo Records — IG Tracker</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9f9f7; color: #1a1a1a; }
@@ -53,8 +53,10 @@
   .report-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
   .report-title { font-size: 14px; font-weight: 600; }
   .report-date { font-size: 12px; color: #888; }
-  .report-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 14px; gap: 8px; }
-  .report-row:last-child { border-bottom: none; }
+  .report-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .report-table th { text-align: left; font-size: 11px; color: #aaa; font-weight: 500; border-bottom: 1px solid #eee; padding: 5px 0; }
+  .report-table td { padding: 8px 0; border-bottom: 1px solid #eee; vertical-align: middle; }
+  .report-table tr:last-child td { border-bottom: none; }
   .err-box { background: #fdf0ee; border: 1px solid #f0c0bb; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #c0392b; margin-bottom: 10px; display: none; }
   .saving { font-size: 12px; color: #888; display: none; }
   a.handle-link { color: #1a1a1a; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: #ddd; }
@@ -71,6 +73,8 @@
   .star-btn { background: none; border: none; cursor: pointer; padding: 0 6px 0 0; font-size: 15px; color: #ddd; line-height: 1; }
   .star-btn.starred { color: #f0b429; }
   .star-btn:hover { background: none; color: #f0b429; }
+  .progress-bar { height: 3px; background: #eee; border-radius: 2px; margin-bottom: 1rem; display: none; }
+  .progress-bar-fill { height: 100%; background: #1a1a1a; border-radius: 2px; width: 0%; transition: width 0.3s; }
 </style>
 </head>
 <body>
@@ -100,15 +104,18 @@
 
   <div id="view-live">
     <div class="top-actions" id="admin-actions">
-      <button class="secondary" onclick="refreshAll()">↻ Refresh all</button>
+      <button class="secondary" id="refresh-btn" onclick="refreshAll()">↻ Refresh all</button>
       <button class="primary" onclick="saveSnapshot()">Manual snapshot</button>
       <button class="secondary" onclick="downloadCSV()">↓ Download CSV</button>
+      <button class="secondary" onclick="downloadPDF()">↓ Download PDF</button>
       <button class="secondary" onclick="sendEmailNow()">✉ Send email update</button>
       <span class="saving" id="saving-indicator">Saving...</span>
     </div>
     <div class="top-actions" id="viewer-actions" style="display:none;">
       <button class="secondary" onclick="downloadCSV()">↓ Download CSV</button>
+      <button class="secondary" onclick="downloadPDF()">↓ Download PDF</button>
     </div>
+    <div class="progress-bar" id="progress-bar"><div class="progress-bar-fill" id="progress-fill"></div></div>
     <div class="roster-tabs">
       <button class="roster-tab active" onclick="switchRosterTab('all')">Full roster</button>
       <button class="roster-tab" onclick="switchRosterTab('my')">My roster</button>
@@ -144,7 +151,18 @@
         <div class="report-title">Weekly follower report</div>
         <div class="report-date" id="report-date"></div>
       </div>
-      <div id="report-rows"><div class="muted" style="font-size:13px;">No snapshots yet.</div></div>
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th style="width:5%">#</th>
+            <th style="width:28%">Handle</th>
+            <th style="width:20%">Followers</th>
+            <th style="width:22%" id="report-th-growth">Follower Growth</th>
+            <th style="width:25%" id="report-th-pct">Follower Growth %</th>
+          </tr>
+        </thead>
+        <tbody id="report-rows"></tbody>
+      </table>
     </div>
     <div class="actions">
       <button onclick="exportReport()">Copy report text</button>
@@ -161,13 +179,8 @@ let currentRosterTab = 'all';
 let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
 
 function saveStarred() { localStorage.setItem(STARRED_KEY, JSON.stringify([...starred])); }
-
-function toggleStar(handle) {
-  if (starred.has(handle)) starred.delete(handle);
-  else starred.add(handle);
-  saveStarred();
-  renderRoster();
-}
+function toggleStar(handle) { if(starred.has(handle)) starred.delete(handle); else starred.add(handle); saveStarred(); renderRoster(); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function checkPassword() {
   const val = document.getElementById('pw-input').value;
@@ -215,27 +228,40 @@ async function persistSnapshots() {
 }
 
 function shortDate(dateStr) {
-  const d = new Date(dateStr);
-  if (isNaN(d)) return dateStr;
+  const d = new Date(dateStr); if (isNaN(d)) return dateStr;
   return `${d.getMonth()+1}/${d.getDate()}`;
 }
 
+function getDateRange() {
+  if (snapshots.length === 0) return null;
+  if (snapshots.length === 1) return { from: shortDate(snapshots[0].date), to: 'now', single: true };
+  const latest=snapshots[snapshots.length-1], prev=snapshots[snapshots.length-2];
+  return { from: shortDate(prev.date), to: shortDate(latest.date), single: false };
+}
+
 function updateColumnHeaders() {
-  if (snapshots.length >= 2) {
-    const latest=snapshots[snapshots.length-1], prev=snapshots[snapshots.length-2];
-    if (latest.date !== prev.date) {
-      const range=`(${shortDate(prev.date)} – ${shortDate(latest.date)})`;
-      document.getElementById('th-growth').innerHTML=`Follower Growth <small style="font-weight:400;color:#bbb;font-size:11px;">${range}</small> <span class="sort-arrow" id="sort-growth">↕</span>`;
-      document.getElementById('th-pct').innerHTML=`Follower Growth % <small style="font-weight:400;color:#bbb;font-size:11px;">${range}</small> <span class="sort-arrow" id="sort-pct">↕</span>`;
-    }
+  const range = getDateRange();
+  const growthEl=document.getElementById('th-growth'), pctEl=document.getElementById('th-pct');
+  if (range && growthEl && pctEl) {
+    const label = range.single ? `(as of ${range.from})` : `(${range.from} – ${range.to})`;
+    growthEl.innerHTML=`Follower Growth <small style="font-weight:400;color:#bbb;font-size:11px;">${label}</small> <span class="sort-arrow" id="sort-growth">↕</span>`;
+    pctEl.innerHTML=`Follower Growth % <small style="font-weight:400;color:#bbb;font-size:11px;">${label}</small> <span class="sort-arrow" id="sort-pct">↕</span>`;
+  }
+  updateReportHeaders();
+}
+
+function updateReportHeaders() {
+  const range=getDateRange();
+  const g=document.getElementById('report-th-growth'), p=document.getElementById('report-th-pct');
+  if (range && g && p) {
+    const label=range.single?`(as of ${range.from})`:`(${range.from} – ${range.to})`;
+    g.textContent=`Follower Growth ${label}`; p.textContent=`Follower Growth % ${label}`;
   }
 }
 
 function fmt(n) {
-  if (n==null) return '—';
-  if (n>=1000000) return (n/1000000).toFixed(2)+'M';
-  if (n>=1000) return (n/1000).toFixed(1)+'K';
-  return Number(n).toLocaleString();
+  if (n==null) return '—'; if (n>=1000000) return (n/1000000).toFixed(2)+'M';
+  if (n>=1000) return (n/1000).toFixed(1)+'K'; return Number(n).toLocaleString();
 }
 function pct(cur,prev) { if (!prev) return null; return (cur-prev)/prev*100; }
 function renderPct(p) {
@@ -254,27 +280,27 @@ function getLastSnap(handle) {
 }
 
 function switchRosterTab(tab) {
-  currentRosterTab = tab;
-  document.querySelectorAll('.roster-tab').forEach((el,i) => el.classList.toggle('active', ['all','my'][i]===tab));
+  currentRosterTab=tab;
+  document.querySelectorAll('.roster-tab').forEach((el,i)=>el.classList.toggle('active',['all','my'][i]===tab));
   renderRoster();
 }
 
 function sortBy(field) {
   if (currentSort.field===field) { currentSort.dir=currentSort.dir==='desc'?'asc':'desc'; }
   else { currentSort.field=field; currentSort.dir=(field==='followers'||field==='growth'||field==='pct')?'desc':'asc'; }
-  ['handle','followers','growth','pct'].forEach(f => { const el=document.getElementById('sort-'+f); if(el){el.textContent='↕';el.classList.remove('active');} });
+  ['handle','followers','growth','pct'].forEach(f=>{const el=document.getElementById('sort-'+f);if(el){el.textContent='↕';el.classList.remove('active');}});
   const arrow=currentSort.dir==='desc'?'▼':'▲';
   const activeEl=document.getElementById('sort-'+field); if(activeEl){activeEl.textContent=arrow;activeEl.classList.add('active');}
   renderRoster();
 }
 
 function getSortedRoster(filterStarred=false) {
-  let list = [...roster].map((r,i) => {
-    const prev=getLastSnap(r.handle), diff=(r.followers!=null&&prev!=null)?r.followers-prev:null, p=(r.followers!=null&&prev!=null)?pct(r.followers,prev):null;
+  let list=[...roster].map((r,i)=>{
+    const prev=getLastSnap(r.handle),diff=(r.followers!=null&&prev!=null)?r.followers-prev:null,p=(r.followers!=null&&prev!=null)?pct(r.followers,prev):null;
     return {...r,_origIndex:i,_diff:diff,_pct:p};
   });
-  if (filterStarred) list = list.filter(r => starred.has(r.handle));
-  return list.sort((a,b) => {
+  if (filterStarred) list=list.filter(r=>starred.has(r.handle));
+  return list.sort((a,b)=>{
     let av,bv;
     if(currentSort.field==='followers'){av=a.followers||0;bv=b.followers||0;}
     else if(currentSort.field==='growth'){av=a._diff??-Infinity;bv=b._diff??-Infinity;}
@@ -288,28 +314,16 @@ function getSortedRoster(filterStarred=false) {
 
 function renderRoster() {
   const tbody=document.getElementById('roster-body');
-  const isMyRoster = currentRosterTab === 'my';
-  const sorted = getSortedRoster(isMyRoster);
-  const cols = isAdmin ? 7 : 6;
-
-  if (!roster.length) { tbody.innerHTML=`<tr><td colspan="${cols}" class="muted" style="padding:12px 0;font-size:13px;">No handles added yet</td></tr>`; return; }
-  if (isMyRoster && sorted.length === 0) { tbody.innerHTML=`<tr><td colspan="${cols}" style="padding:12px 0;font-size:13px;color:#aaa;">No starred artists yet — click ☆ next to any artist to add them here.</td></tr>`; return; }
-
-  tbody.innerHTML=sorted.map((r,rankIdx) => {
+  const isMyRoster=currentRosterTab==='my', sorted=getSortedRoster(isMyRoster), cols=isAdmin?7:6;
+  if(!roster.length){tbody.innerHTML=`<tr><td colspan="${cols}" class="muted" style="padding:12px 0;font-size:13px;">No handles added yet</td></tr>`;return;}
+  if(isMyRoster&&sorted.length===0){tbody.innerHTML=`<tr><td colspan="${cols}" style="padding:12px 0;font-size:13px;color:#aaa;">No starred artists yet — click ☆ next to any artist to add them here.</td></tr>`;return;}
+  tbody.innerHTML=sorted.map((r,rankIdx)=>{
     const i=r._origIndex;
     const fc=r.status==='loading'?'<span class="muted">fetching...</span>':r.status==='error'?'<span class="pill-err">error</span>':`<strong>${fmt(r.followers)}</strong>`;
     const igUrl=`https://www.instagram.com/${r.handle}/`;
-    const isStarred = starred.has(r.handle);
+    const isStarred=starred.has(r.handle);
     const removeBtn=isAdmin?`<td style="text-align:right"><button class="danger" onclick="removeHandle(${i})">✕</button></td>`:'';
-    return `<tr>
-      <td><span class="rank">${rankIdx+1}</span></td>
-      <td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td>
-      <td><a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></td>
-      <td>${fc}</td>
-      <td>${r.status==='ok'?renderGrowth(r._diff):'<span class="muted">—</span>'}</td>
-      <td>${r.status==='ok'?renderPct(r._pct):'<span class="muted">—</span>'}</td>
-      ${removeBtn}
-    </tr>`;
+    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></td><td>${fc}</td><td>${r.status==='ok'?renderGrowth(r._diff):'<span class="muted">—</span>'}</td><td>${r.status==='ok'?renderPct(r._pct):'<span class="muted">—</span>'}</td>${removeBtn}</tr>`;
   }).join('');
 }
 
@@ -321,10 +335,10 @@ async function fetchFollowers(handle) {
   return data.follower_count;
 }
 
-function showErr(msg) { const el=document.getElementById('err-box'); el.textContent=msg; el.style.display='block'; setTimeout(()=>{el.style.display='none';},7000); }
+function showErr(msg){const el=document.getElementById('err-box');el.textContent=msg;el.style.display='block';setTimeout(()=>{el.style.display='none';},7000);}
 
 async function addHandle() {
-  const input=document.getElementById('add-input'), handle=input.value.trim().replace('@','').toLowerCase();
+  const input=document.getElementById('add-input'),handle=input.value.trim().replace('@','').toLowerCase();
   if(!handle) return;
   if(roster.find(r=>r.handle===handle)){showErr('@'+handle+' already in roster.');return;}
   input.value='';
@@ -335,10 +349,19 @@ async function addHandle() {
   renderRoster(); await persistRoster();
 }
 
-async function removeHandle(i) { roster.splice(i,1); renderRoster(); await persistRoster(); }
+async function removeHandle(i){roster.splice(i,1);renderRoster();await persistRoster();}
 
 async function refreshAll() {
-  for(const r of roster){r.status='loading';renderRoster();try{r.followers=await fetchFollowers(r.handle);r.status='ok';}catch(e){r.status='error';}renderRoster();}
+  const btn=document.getElementById('refresh-btn'),pb=document.getElementById('progress-bar'),pf=document.getElementById('progress-fill');
+  btn.disabled=true; btn.textContent='Refreshing...'; pb.style.display='block'; pf.style.width='0%';
+  const total=roster.length;
+  for(let idx=0;idx<total;idx++){
+    const r=roster[idx]; r.status='loading'; renderRoster();
+    try{r.followers=await fetchFollowers(r.handle);r.status='ok';}catch(e){r.status='error';}
+    renderRoster(); pf.style.width=`${Math.round((idx+1)/total*100)}%`;
+    if(idx<total-1) await sleep(1100);
+  }
+  pb.style.display='none'; btn.disabled=false; btn.textContent='↻ Refresh all';
   await persistRoster();
 }
 
@@ -357,13 +380,30 @@ async function sendEmailNow() {
   btn.textContent='✉ Send email update'; btn.disabled=false;
 }
 
-function downloadCSV() {
-  const sorted=getSortedRoster(currentRosterTab==='my'); let csv='Rank,Handle,Followers,Follower Growth,Follower Growth %\n';
-  sorted.forEach((r,idx)=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';csv+=`${idx+1},@${r.handle},${r.followers!=null?r.followers:''},${growth},${growthPct}\n`;});
-  const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='ig-follower-report.csv';a.click();URL.revokeObjectURL(url);
+function getCSVFilename(){const d=new Date();return `Alamo-Santa-Anna-Instagram-Report-${d.toLocaleString('en-US',{month:'short'})}-${d.getDate()}-${d.getFullYear()}.csv`;}
+
+function downloadCSV(){
+  const sorted=getSortedRoster(currentRosterTab==='my'); let csv='Rank,Handle,Instagram URL,Followers,Follower Growth,Follower Growth %\n';
+  sorted.forEach((r,idx)=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';csv+=`${idx+1},@${r.handle},https://www.instagram.com/${r.handle}/,${r.followers!=null?r.followers:''},${growth},${growthPct}\n`;});
+  const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=getCSVFilename();a.click();URL.revokeObjectURL(url);
 }
 
-async function generateHighlights(latest,prev) {
+function downloadPDF(){
+  const sorted=getSortedRoster(currentRosterTab==='my');
+  const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const range=getDateRange();
+  const rangeLabel=range?(range.single?`as of ${range.from}`:`${range.from} – ${range.to}`):'';
+  const rows=sorted.map((r,idx)=>{
+    const growth=r._diff!==null?(r._diff>=0?'+':'')+Number(r._diff).toLocaleString():'—';
+    const growthPct=r._pct!==null?(r._pct>=0?'▲ +':'▼ ')+r._pct.toFixed(2)+'%':'—';
+    const color=r._diff>0?'#27ae60':r._diff<0?'#c0392b':'#888';
+    return `<tr><td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;color:#bbb;font-size:12px;">${idx+1}</td><td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;"><a href="https://www.instagram.com/${r.handle}/" style="color:#1a1a1a;text-decoration:underline;">@${r.handle}</a></td><td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-weight:600;">${fmt(r.followers)}</td><td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;color:${color};">${growth}</td><td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;color:${color};">${growthPct}</td></tr>`;
+  }).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Alamo IG Report</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:2rem;color:#1a1a1a;max-width:900px;margin:0 auto;}h1{font-size:20px;font-weight:600;margin-bottom:4px;}p{font-size:13px;color:#888;margin-bottom:1.5rem;}table{width:100%;border-collapse:collapse;font-size:13px;}th{text-align:left;font-size:11px;color:#aaa;font-weight:500;border-bottom:2px solid #eee;padding:6px 12px;}@media print{body{padding:1rem;}}</style></head><body><h1>Instagram Follower Report</h1><p>Alamo Records / Santa Anna Roster — ${today}</p><table><thead><tr><th>#</th><th>Handle</th><th>Followers</th><th>Follower Growth ${rangeLabel}</th><th>Follower Growth % ${rangeLabel}</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+  const w=window.open('','_blank'); w.document.write(html); w.document.close(); setTimeout(()=>w.print(),500);
+}
+
+async function generateHighlights(latest,prev){
   const box=document.getElementById('highlights-box'),content=document.getElementById('highlights-content');
   box.style.display='block'; content.innerHTML='<span style="color:#888;font-size:13px;">Generating highlights...</span>';
   if(!prev){content.innerHTML='<ul><li>This is the first snapshot — growth data will appear after the next refresh.</li></ul>';return;}
@@ -372,12 +412,12 @@ async function generateHighlights(latest,prev) {
   const biggestGainer=sorted[0],biggestDrop=sorted[sorted.length-1],gainers=changes.filter(c=>c.diff>0).length,losers=changes.filter(c=>c.diff<0).length;
   const milestones=changes.filter(c=>{const pf=c.followers-c.diff;return[100000,250000,500000,1000000,2000000,5000000,10000000].some(t=>pf<t&&c.followers>=t);});
   const prompt=`You are a music industry analyst writing a brief weekly highlights summary for a record label's Instagram follower report. Write 3-5 bullet points in full sentences. Be concise.\n\nDate: ${latest.date}\nArtists: ${latest.data.length}\nGained: ${gainers}, Lost: ${losers}\nBiggest gainer: @${biggestGainer.handle} (+${biggestGainer.diff.toLocaleString()}, +${biggestGainer.pct.toFixed(2)}%)\nBiggest drop: @${biggestDrop.handle} (${biggestDrop.diff.toLocaleString()}, ${biggestDrop.pct.toFixed(2)}%)\n${milestones.length>0?'Milestones: '+milestones.map(m=>'@'+m.handle).join(', '):'No milestones.'}\n\nStart each bullet with a dash. No intro or conclusion.`;
-  try {
+  try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content:prompt}]})});
     const data=await res.json();const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
     const lines=text.split('\n').filter(l=>l.trim());
     content.innerHTML='<ul>'+lines.map(l=>`<li>${l.replace(/^[-•]\s*/,'')}</li>`).join('')+'</ul>';
-  } catch(e) {
+  }catch(e){
     const bullets=[];
     bullets.push(`${gainers} out of ${latest.data.length} artists gained followers this week, while ${losers} saw a decline.`);
     if(biggestGainer?.diff>0) bullets.push(`Biggest gainer: @${biggestGainer.handle} added ${biggestGainer.diff.toLocaleString()} followers (+${biggestGainer.pct.toFixed(2)}%).`);
@@ -387,16 +427,21 @@ async function generateHighlights(latest,prev) {
   }
 }
 
-function renderReport() {
-  const el=document.getElementById('report-rows'),dateEl=document.getElementById('report-date');
-  if(!snapshots.length){el.innerHTML='<div class="muted" style="font-size:13px;">No snapshots yet.</div>';return;}
+function renderReport(){
+  const tbody=document.getElementById('report-rows'),dateEl=document.getElementById('report-date');
+  if(!snapshots.length){tbody.innerHTML='<tr><td colspan="5" class="muted" style="font-size:13px;padding:12px 0;">No snapshots yet.</td></tr>';return;}
   const latest=snapshots[snapshots.length-1],prev=snapshots.length>1?snapshots[snapshots.length-2]:null;
-  dateEl.textContent=latest.date; generateHighlights(latest,prev);
+  dateEl.textContent=latest.date; generateHighlights(latest,prev); updateReportHeaders();
   const sorted=[...latest.data].sort((a,b)=>b.followers-a.followers);
-  el.innerHTML=sorted.map((d,idx)=>{const pe=prev?prev.data.find(p=>p.handle===d.handle):null;const p=pe?pct(d.followers,pe.followers):null;const diff=pe?d.followers-pe.followers:null;return `<div class="report-row"><span style="min-width:24px;font-size:12px;color:#bbb;">${idx+1}</span><span style="min-width:130px"><a class="handle-link" href="https://www.instagram.com/${d.handle}/" target="_blank">@${d.handle}</a></span><strong style="min-width:90px">${fmt(d.followers)}</strong><span>${diff!==null?`${renderGrowth(diff)} ${renderPct(p)}`:'<span class="muted">first entry</span>'}</span></div>`;}).join('');
+  tbody.innerHTML=sorted.map((d,idx)=>{
+    const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
+    const p=pe?pct(d.followers,pe.followers):null;
+    const diff=pe?d.followers-pe.followers:null;
+    return `<tr><td style="color:#bbb;font-size:12px;">${idx+1}</td><td><a class="handle-link" href="https://www.instagram.com/${d.handle}/" target="_blank">@${d.handle}</a></td><td><strong>${fmt(d.followers)}</strong></td><td>${diff!==null?renderGrowth(diff):'<span class="muted">first entry</span>'}</td><td>${diff!==null?renderPct(p):'<span class="muted">—</span>'}</td></tr>`;
+  }).join('');
 }
 
-function exportReport() {
+function exportReport(){
   if(!snapshots.length){alert('No snapshot data yet.');return;}
   const latest=snapshots[snapshots.length-1],prev=snapshots.length>1?snapshots[snapshots.length-2]:null;
   let txt=`Instagram Weekly Report — ${latest.date}\n${'─'.repeat(44)}\n`;
@@ -404,7 +449,7 @@ function exportReport() {
   navigator.clipboard.writeText(txt).then(()=>alert('Copied!')).catch(()=>alert(txt));
 }
 
-function switchTab(tab) {
+function switchTab(tab){
   document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',['live','report'][i]===tab));
   document.getElementById('view-live').style.display=tab==='live'?'':'none';
   document.getElementById('view-report').style.display=tab==='report'?'':'none';
