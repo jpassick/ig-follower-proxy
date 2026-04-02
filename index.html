@@ -195,7 +195,7 @@
 const ADMIN_PASSWORD = 'AlamoRec0rds$';
 const VIEW_PASSWORD = '25Madison';
 const STARRED_KEY = 'ig_starred_v1';
-let roster = [], snapshots = [], currentSort = { field: 'followers', dir: 'desc' }, isAdmin = false;
+let roster = [], snapshots = [], currentSort = { field: 'growth', dir: 'desc' }, isAdmin = false;
 let currentRosterTab = 'all', currentPeriod = 7;
 let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
 
