@@ -132,14 +132,13 @@
         <button class="roster-tab active" onclick="switchRosterTab('all')">Full roster</button>
         <button class="roster-tab" onclick="switchRosterTab('my')">My roster</button>
       </div>
-      <div class="period-tabs">
-        <span class="period-label">Growth period:</span>
-        <button class="period-tab active" onclick="setPeriod(1)" id="period-1">Last refresh</button>
-        <button class="period-tab" onclick="setPeriod(7)" id="period-7">7 days</button>
-        <button class="period-tab" onclick="setPeriod(14)" id="period-14">14 days</button>
-        <button class="period-tab" onclick="setPeriod(30)" id="period-30">30 days</button>
-      </div>
-    </div>
+<div class="period-tabs">
+  <span class="period-label">Growth period:</span>
+  <button class="period-tab active" onclick="setPeriod(7)" id="period-7">7 days</button>
+  <button class="period-tab" onclick="setPeriod(14)" id="period-14">14 days</button>
+  <button class="period-tab" onclick="setPeriod(30)" id="period-30">30 days</button>
+  <button class="period-tab" onclick="setPeriod(1)" id="period-1">Last refresh</button>
+</div>
     <div class="add-row" id="add-row-el">
       <input type="text" id="add-input" placeholder="Instagram handle, e.g. rodwave" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
       <button class="primary" onclick="addHandle()">Add + fetch</button>
@@ -196,7 +195,7 @@ const ADMIN_PASSWORD = 'AlamoRec0rds$';
 const VIEW_PASSWORD = '25Madison';
 const STARRED_KEY = 'ig_starred_v1';
 let roster = [], snapshots = [], currentSort = { field: 'followers', dir: 'desc' }, isAdmin = false;
-let currentRosterTab = 'all', currentPeriod = 1;
+let currentRosterTab = 'all', currentPeriod = 7;
 let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
 
 function saveStarred() { localStorage.setItem(STARRED_KEY, JSON.stringify([...starred])); }
