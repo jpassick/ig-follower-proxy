@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en"> 
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -75,7 +75,7 @@
   .highlights-content { font-size: 13px; color: #1a1a1a; line-height: 1.7; }
   .highlights-content ul { padding-left: 1.25rem; }
   .highlights-content li { margin-bottom: 4px; }
-  .actions { display: flex; gap: 8px; margin-top: 1.25rem; }
+  .actions { display: flex; gap: 8px; margin-bottom: 1rem; }
   .rank { font-size: 12px; color: #bbb; font-weight: 500; min-width: 20px; }
   .star-btn { background: none; border: none; cursor: pointer; padding: 0 4px 0 0; font-size: 15px; color: #ddd; line-height: 1; }
   .star-btn.starred { color: #f0b429; }
@@ -158,9 +158,11 @@
         </tr>
       </thead>
       <tbody id="roster-body"></tbody>
-    </div>
+    </table>
+  </div>
+
   <div id="view-report" style="display:none;">
-    <div class="actions" style="margin-bottom:1rem;">
+    <div class="actions">
       <button onclick="exportReport()">Copy report text</button>
       <button onclick="downloadReportPDF()">↓ Download PDF</button>
     </div>
@@ -394,8 +396,6 @@ function downloadCSV(){
 function downloadPDF(){
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
   const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  const pair=getSnapshotPair();
-  const rangeLabel=pair&&pair.prev?`${shortDate(pair.prev.date)} – ${shortDate(pair.latest.date)}`:pair&&pair.latest?`as of ${shortDate(pair.latest.date)}`:'';
   const sorted=getSortedRoster(currentRosterTab==='my');
   doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('Instagram Follower Report',14,20);
   doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(120);
@@ -422,7 +422,6 @@ function downloadReportPDF(){
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
   const latest=snapshots[snapshots.length-1],prev=snapshots.length>1?snapshots[snapshots.length-2]:null;
   const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  const rangeLabel=prev?`${shortDate(prev.date)} – ${shortDate(latest.date)}`:'';
   const sorted=[...latest.data].sort((a,b)=>b.followers-a.followers).map(d=>{
     const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
     const diff=pe?d.followers-pe.followers:null;
@@ -449,7 +448,7 @@ function downloadReportPDF(){
   });
   doc.autoTable({
     startY,
-    head:[['#','Handle','Followers',rangeLabel?`Growth (${rangeLabel})`:'Growth',rangeLabel?`Growth % (${rangeLabel})`:'Growth %']],
+    head:[['#','Handle','Followers','Follower Growth','Follower Growth %']],
     body:tableData,
     styles:{fontSize:10,cellPadding:3},
     headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},
