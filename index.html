@@ -243,7 +243,7 @@ function updateLastUpdated() {
   const timestamps=roster.filter(r=>r.updatedAt).map(r=>r.updatedAt);
   if(timestamps.length){
     const d=new Date(Math.max(...timestamps));
-    el.textContent=`Last updated: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
+    el.textContent=`Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
     return;
   }
   if(snapshots.length){
