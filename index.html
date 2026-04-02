@@ -132,13 +132,14 @@
         <button class="roster-tab active" onclick="switchRosterTab('all')">Full roster</button>
         <button class="roster-tab" onclick="switchRosterTab('my')">My roster</button>
       </div>
-<div class="period-tabs">
-  <span class="period-label">Growth period:</span>
-  <button class="period-tab active" onclick="setPeriod(7)" id="period-7">7 days</button>
-  <button class="period-tab" onclick="setPeriod(14)" id="period-14">14 days</button>
-  <button class="period-tab" onclick="setPeriod(30)" id="period-30">30 days</button>
-  <button class="period-tab" onclick="setPeriod(1)" id="period-1">Last refresh</button>
-</div>
+      <div class="period-tabs">
+        <span class="period-label">Growth period:</span>
+        <button class="period-tab active" onclick="setPeriod(7)" id="period-7">7 days</button>
+        <button class="period-tab" onclick="setPeriod(14)" id="period-14">14 days</button>
+        <button class="period-tab" onclick="setPeriod(30)" id="period-30">30 days</button>
+        <button class="period-tab" onclick="setPeriod(1)" id="period-1">Last refresh</button>
+      </div>
+    </div>
     <div class="add-row" id="add-row-el">
       <input type="text" id="add-input" placeholder="Instagram handle, e.g. rodwave" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
       <button class="primary" onclick="addHandle()">Add + fetch</button>
@@ -176,8 +177,8 @@
             <th style="width:5%">#</th>
             <th style="width:30%">Handle</th>
             <th style="width:20%">Followers</th>
-            <th style="width:22%" id="report-th-growth">Follower Growth</th>
-            <th style="width:23%" id="report-th-pct">Follower Growth %</th>
+            <th style="width:22%">Follower Growth</th>
+            <th style="width:23%">Follower Growth %</th>
           </tr>
         </thead>
         <tbody id="report-rows"></tbody>
@@ -284,14 +285,6 @@ function getSnapshotPair() {
 
 function shortDate(dateStr){const d=new Date(dateStr);if(isNaN(d))return dateStr;return `${d.getMonth()+1}/${d.getDate()}`;}
 
-function updateColumnHeaders() { updateReportHeaders(); }
-
-function updateReportHeaders(){
-  const g=document.getElementById('report-th-growth'),p=document.getElementById('report-th-pct');
-  if(g) g.textContent='Follower Growth';
-  if(p) p.textContent='Follower Growth %';
-}
-
 function fmt(n){if(n==null)return '—';if(n>=1000000)return (n/1000000).toFixed(2)+'M';if(n>=1000)return (n/1000).toFixed(1)+'K';return Number(n).toLocaleString();}
 function pct(cur,prev){if(!prev)return null;return(cur-prev)/prev*100;}
 function renderPct(p){if(p===null)return '<span class="muted">—</span>';const sign=p>0?'+':'',cls=p>0?'up':p<0?'down':'muted',arrow=p>0?'▲':p<0?'▼':'–';return `<span class="${cls}">${arrow} ${sign}${p.toFixed(2)}%</span>`;}
@@ -380,7 +373,7 @@ async function saveSnapshot(){
   const valid=roster.filter(r=>r.followers!=null);
   if(!valid.length){showErr('No data yet.');return;}
   const snap={date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),ts:Date.now(),data:valid.map(r=>({handle:r.handle,followers:r.followers}))};
-  snapshots.push(snap);await persistSnapshots();updateColumnHeaders();renderReport();
+  snapshots.push(snap);await persistSnapshots();renderReport();
   alert('Snapshot saved — '+snap.date);
 }
 
@@ -395,8 +388,8 @@ function getFileDateStr(){const d=new Date();return `${d.toLocaleString('en-US',
 
 function downloadCSV(){
   const sorted=getSortedRoster(currentRosterTab==='my').sort((a,b)=>(b._diff??-Infinity)-(a._diff??-Infinity));
-  let csv='Rank,Handle,Instagram URL,Followers,Follower Growth,Follower Growth %\n';
-  sorted.forEach((r,idx)=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';csv+=`${idx+1},@${r.handle},https://www.instagram.com/${r.handle}/,${r.followers!=null?r.followers:''},${growth},${growthPct}\n`;});
+  let csv='Rank,Handle,Followers,Follower Growth,Follower Growth %\n';
+  sorted.forEach((r,idx)=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';csv+=`${idx+1},@${r.handle},${r.followers!=null?r.followers:''},${growth},${growthPct}\n`;});
   const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
 }
 
@@ -412,24 +405,60 @@ function downloadPDF(){
   const tableData=sorted.map((r,idx)=>{
     const growth=r._diff!==null?(r._diff>=0?'+':'')+Number(r._diff).toLocaleString():'—';
     const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'—';
-    return[idx+1,`@${r.handle}`,`instagram.com/${r.handle}`,fmt(r.followers),growth,growthPct];
+    return[idx+1,`@${r.handle}`,fmt(r.followers),growth,growthPct];
   });
   doc.autoTable({
     startY:34,
-    head:[['#','Handle','Instagram URL','Followers',`Growth ${rangeLabel}`,`Growth % ${rangeLabel}`]],
+    head:[['#','Handle','Followers',rangeLabel?`Growth (${rangeLabel})`:'Growth',rangeLabel?`Growth % (${rangeLabel})`:'Growth %']],
     body:tableData,
-    styles:{fontSize:9,cellPadding:3},
+    styles:{fontSize:10,cellPadding:3},
     headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},
     alternateRowStyles:{fillColor:[249,249,247]},
-    columnStyles:{0:{cellWidth:10},1:{cellWidth:38},2:{cellWidth:48},3:{cellWidth:28},4:{cellWidth:30},5:{cellWidth:30}},
-    didDrawCell:(data)=>{
-      if(data.section==='body'&&data.column.index===2){
-        const handle=sorted[data.row.index]?.handle;
-        if(handle) doc.link(data.cell.x,data.cell.y,data.cell.width,data.cell.height,{url:`https://www.instagram.com/${handle}/`});
-      }
-    }
+    columnStyles:{0:{cellWidth:12},1:{cellWidth:60},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:40}}
   });
   doc.save(`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.pdf`);
+}
+
+function downloadReportPDF(){
+  if(!snapshots.length){alert('No snapshot data yet.');return;}
+  const{jsPDF}=window.jspdf;const doc=new jsPDF();
+  const latest=snapshots[snapshots.length-1],prev=snapshots.length>1?snapshots[snapshots.length-2]:null;
+  const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const rangeLabel=prev?`${shortDate(prev.date)} – ${shortDate(latest.date)}`:'';
+  const sorted=[...latest.data].sort((a,b)=>b.followers-a.followers).map(d=>{
+    const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
+    const diff=pe?d.followers-pe.followers:null;
+    const p=pe?pct(d.followers,pe.followers):null;
+    return{...d,_diff:diff,_pct:p};
+  });
+  doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('Weekly Follower Report',14,20);
+  doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(120);
+  doc.text(`Alamo Records / Santa Anna Roster — ${today}`,14,28);doc.setTextColor(0);
+  const highlightsEl=document.getElementById('highlights-content');
+  const highlightsText=highlightsEl?highlightsEl.innerText:'';
+  let startY=36;
+  if(highlightsText&&highlightsText.trim()&&!highlightsText.includes('Generating')){
+    doc.setFontSize(11);doc.setFont('helvetica','bold');doc.text('Weekly Highlights',14,38);
+    doc.setFont('helvetica','normal');doc.setFontSize(9);
+    const lines=doc.splitTextToSize(highlightsText,180);
+    doc.text(lines,14,46);
+    startY=46+(lines.length*5)+4;
+  }
+  const tableData=sorted.map((r,idx)=>{
+    const growth=r._diff!==null?(r._diff>=0?'+':'')+Number(r._diff).toLocaleString():'—';
+    const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'first entry';
+    return[idx+1,`@${r.handle}`,fmt(r.followers),growth,growthPct];
+  });
+  doc.autoTable({
+    startY,
+    head:[['#','Handle','Followers',rangeLabel?`Growth (${rangeLabel})`:'Growth',rangeLabel?`Growth % (${rangeLabel})`:'Growth %']],
+    body:tableData,
+    styles:{fontSize:10,cellPadding:3},
+    headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[249,249,247]},
+    columnStyles:{0:{cellWidth:12},1:{cellWidth:60},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:40}}
+  });
+  doc.save(`Alamo-Weekly-Report-${getFileDateStr()}.pdf`);
 }
 
 async function generateHighlights(latest,prev){
@@ -460,7 +489,7 @@ function renderReport(){
   const tbody=document.getElementById('report-rows'),dateEl=document.getElementById('report-date');
   if(!snapshots.length){tbody.innerHTML='<tr><td colspan="5" class="muted" style="font-size:13px;padding:12px 0;">No snapshots yet.</td></tr>';return;}
   const latest=snapshots[snapshots.length-1],prev=snapshots.length>1?snapshots[snapshots.length-2]:null;
-  dateEl.textContent=latest.date;generateHighlights(latest,prev);updateReportHeaders();
+  dateEl.textContent=latest.date;generateHighlights(latest,prev);
   const sorted=[...latest.data].sort((a,b)=>b.followers-a.followers);
   tbody.innerHTML=sorted.map((d,idx)=>{
     const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
