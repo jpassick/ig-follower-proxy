@@ -158,10 +158,12 @@
         </tr>
       </thead>
       <tbody id="roster-body"></tbody>
-    </table>
-  </div>
-
+    </div>
   <div id="view-report" style="display:none;">
+    <div class="actions" style="margin-bottom:1rem;">
+      <button onclick="exportReport()">Copy report text</button>
+      <button onclick="downloadReportPDF()">↓ Download PDF</button>
+    </div>
     <div class="highlights-box" id="highlights-box" style="display:none;">
       <div class="highlights-title">Weekly Highlights</div>
       <div class="highlights-content" id="highlights-content"></div>
@@ -183,10 +185,6 @@
         </thead>
         <tbody id="report-rows"></tbody>
       </table>
-    </div>
-    <div class="actions">
-      <button onclick="exportReport()">Copy report text</button>
-      <button onclick="downloadReportPDF()">↓ Download PDF</button>
     </div>
   </div>
 </div>
