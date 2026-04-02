@@ -286,11 +286,15 @@ function getSnapshotPair() {
 function shortDate(dateStr){const d=new Date(dateStr);if(isNaN(d))return dateStr;return `${d.getMonth()+1}/${d.getDate()}`;}
 
 function updateColumnHeaders() { updateReportHeaders(); }
+
 function updateReportHeaders(){
+  const pair=getSnapshotPair();
   const g=document.getElementById('report-th-growth'),p=document.getElementById('report-th-pct');
-  if(g) g.textContent='Follower Growth';
-  if(p) p.textContent='Follower Growth %';
-}
+  if(pair&&g&&p){
+    const label=pair.prev?`(${shortDate(pair.prev.date)} – ${shortDate(pair.latest.date)})`:pair.latest?`(as of ${shortDate(pair.latest.date)})`:'';
+    g.textContent=`Follower Growth ${label}`;
+    p.textContent=`Follower Growth % ${label}`;
+  }
 }
 
 function fmt(n){if(n==null)return '—';if(n>=1000000)return (n/1000000).toFixed(2)+'M';if(n>=1000)return (n/1000).toFixed(1)+'K';return Number(n).toLocaleString();}
