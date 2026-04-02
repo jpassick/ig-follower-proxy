@@ -35,15 +35,17 @@ export default async function handler(req, res) {
     return Number(n).toLocaleString();
   };
 
-  const sorted = [...latest.data].sort((a, b) => b.followers - a.followers);
-
-  const rows = sorted.map(d => {
+  const withGrowth = latest.data.map(d => {
     const pe = prev ? prev.data.find(p => p.handle === d.handle) : null;
     const diff = pe ? d.followers - pe.followers : null;
     const pct = pe ? ((d.followers - pe.followers) / pe.followers * 100) : null;
-    const growthStr = diff !== null ? `${diff >= 0 ? '+' : ''}${Number(diff).toLocaleString()}` : '—';
-    const pctStr = pct !== null ? `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%` : '—';
-    const color = diff > 0 ? '#27ae60' : diff < 0 ? '#c0392b' : '#888';
+    return { ...d, diff, pct };
+  }).sort((a, b) => (b.diff ?? -Infinity) - (a.diff ?? -Infinity));
+
+  const rows = withGrowth.map(d => {
+    const growthStr = d.diff !== null ? `${d.diff >= 0 ? '+' : ''}${Number(d.diff).toLocaleString()}` : '—';
+    const pctStr = d.pct !== null ? `${d.pct >= 0 ? '+' : ''}${d.pct.toFixed(2)}%` : '—';
+    const color = d.diff > 0 ? '#27ae60' : d.diff < 0 ? '#c0392b' : '#888';
     return `<tr>
       <td style="padding:8px 12px;border-bottom:1px solid #eee;"><a href="https://www.instagram.com/${d.handle}/" style="color:#1a1a1a;text-decoration:none;">@${d.handle}</a></td>
       <td style="padding:8px 12px;border-bottom:1px solid #eee;font-weight:600;">${fmt(d.followers)}</td>
@@ -58,7 +60,7 @@ export default async function handler(req, res) {
         <a href="https://ig-follower-proxy.vercel.app" style="display:inline-block;background:#1a1a1a;color:#fff;font-size:13px;font-weight:500;padding:10px 24px;border-radius:8px;text-decoration:none;letter-spacing:0.03em;">View Live Dashboard →</a>
       </div>
       <h1 style="font-size:20px;font-weight:600;margin-bottom:4px;">Instagram Weekly Report</h1>
-      <p style="font-size:13px;color:#888;margin-bottom:1.5rem;">Alamo Records — ${latest.date}</p>
+      <p style="font-size:13px;color:#888;margin-bottom:1.5rem;">Alamo Records / Santa Anna Roster — ${latest.date}</p>
       <table style="width:100%;border-collapse:collapse;font-size:14px;">
         <thead>
           <tr style="background:#f9f9f7;">
