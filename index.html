@@ -409,7 +409,7 @@ function downloadPDF(){
   });
   doc.autoTable({
     startY:34,
-    head:[['#','Handle','Followers',rangeLabel?`Growth (${rangeLabel})`:'Growth',rangeLabel?`Growth % (${rangeLabel})`:'Growth %']],
+    head:[['#','Handle','Followers','Follower Growth','Follower Growth %']],
     body:tableData,
     styles:{fontSize:10,cellPadding:3},
     headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},
