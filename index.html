@@ -235,7 +235,7 @@ async function loadRoster() {
 }
 
 async function loadSnapshots() {
-  try { const res=await fetch('/api/snapshots'); const data=await res.json(); snapshots=data.snapshots||[]; updateColumnHeaders(); }
+  try { const res=await fetch('/api/snapshots'); const data=await res.json(); snapshots=data.snapshots||[]; renderRoster(); updateLastUpdated(); }
   catch(e) { snapshots=[]; }
 }
 
