@@ -10,7 +10,12 @@
     },
     {
       "path": "/api/cron-snapshot-daily",
-      "schedule": "5 15 * * *"
+      "schedule": "0 15 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "api/cron-snapshot-daily.js": {
+      "maxDuration": 120
+    }
+  }
 }
