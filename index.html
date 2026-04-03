@@ -25,7 +25,6 @@
   h1 { font-size: 18px; font-weight: 600; }
   .subtitle { font-size: 13px; color: #888; margin-bottom: 0.1rem; }
   .last-updated { font-size: 11px; color: #bbb; margin-bottom: 0.25rem; }
-  .refresh-note { font-size: 12px; color: #bbb; margin-bottom: 1.5rem; font-style: italic; }
   .view-badge { font-size: 11px; background: #f0f0f0; color: #888; border-radius: 20px; padding: 2px 10px; }
   .tabs { display: flex; gap: 6px; margin-bottom: 1.5rem; }
   .tab { font-size: 13px; padding: 6px 16px; border-radius: 20px; cursor: pointer; border: 1px solid #ddd; background: transparent; color: #666; }
@@ -75,6 +74,15 @@
   .highlights-content { font-size: 13px; color: #1a1a1a; line-height: 1.7; }
   .highlights-content ul { padding-left: 1.25rem; }
   .highlights-content li { margin-bottom: 4px; }
+  .my-roster-analysis-box { background: #f5f0ff; border: 1px solid #d4bff8; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+  .my-roster-analysis-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; }
+  .my-roster-analysis-title { font-size: 13px; font-weight: 600; color: #6b2fa0; }
+  .my-roster-analysis-subtitle { font-size: 11px; color: #9b6fd4; margin-bottom: 10px; }
+  .my-roster-analysis-content { font-size: 13px; color: #1a1a1a; line-height: 1.7; }
+  .my-roster-analysis-content ul { padding-left: 1.25rem; }
+  .my-roster-analysis-content li { margin-bottom: 4px; }
+  .analysis-regen-btn { font-size: 11px; padding: 3px 10px; border-radius: 20px; border: 1px solid #d4bff8; background: transparent; color: #6b2fa0; cursor: pointer; }
+  .analysis-regen-btn:hover { background: #ede5ff; }
   .actions { display: flex; gap: 8px; margin-bottom: 1rem; }
   .rank { font-size: 12px; color: #bbb; font-weight: 500; min-width: 20px; }
   .star-btn { background: none; border: none; cursor: pointer; padding: 0 4px 0 0; font-size: 15px; color: #ddd; line-height: 1; }
@@ -139,6 +147,16 @@
         <button class="period-tab" onclick="setPeriod(1)" id="period-1">Last refresh</button>
       </div>
     </div>
+
+    <div class="my-roster-analysis-box" id="my-roster-analysis-box" style="display:none;">
+      <div class="my-roster-analysis-header">
+        <div class="my-roster-analysis-title">★ My Roster Analysis</div>
+        <button class="analysis-regen-btn" onclick="regenerateMyRosterAnalysis()">↻ Regenerate</button>
+      </div>
+      <div class="my-roster-analysis-subtitle" id="my-roster-analysis-subtitle"></div>
+      <div class="my-roster-analysis-content" id="my-roster-analysis-content"></div>
+    </div>
+
     <div class="add-row" id="add-row-el">
       <input type="text" id="add-input" placeholder="Instagram handle, e.g. rodwave" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
       <button class="primary" onclick="addHandle()">Add + fetch</button>
@@ -197,9 +215,16 @@ const STARRED_KEY = 'ig_starred_v1';
 let roster = [], snapshots = [], currentSort = { field: 'growth', dir: 'desc' }, isAdmin = false;
 let currentRosterTab = 'all', currentPeriod = 7;
 let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
+let myRosterAnalysisGenerated = false;
 
 function saveStarred() { localStorage.setItem(STARRED_KEY, JSON.stringify([...starred])); }
-function toggleStar(handle) { if(starred.has(handle)) starred.delete(handle); else starred.add(handle); saveStarred(); renderRoster(); }
+function toggleStar(handle) {
+  if(starred.has(handle)) starred.delete(handle); else starred.add(handle);
+  saveStarred();
+  myRosterAnalysisGenerated = false;
+  renderRoster();
+  if(currentRosterTab === 'my') generateMyRosterAnalysis();
+}
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function proxyUrl(url) { if(!url) return ''; return `/api/proxy-image?url=${encodeURIComponent(url)}`; }
 
@@ -269,7 +294,9 @@ function setPeriod(days) {
   document.querySelectorAll('.period-tab').forEach(el=>el.classList.remove('active'));
   const map={1:'period-1',7:'period-7',14:'period-14',30:'period-30'};
   const el=document.getElementById(map[days]); if(el) el.classList.add('active');
+  myRosterAnalysisGenerated = false;
   renderRoster();
+  if(currentRosterTab === 'my') generateMyRosterAnalysis();
 }
 
 function getSnapshotPair() {
@@ -295,7 +322,103 @@ function getSnapVal(handle){
   return e?e.followers:null;
 }
 
-function switchRosterTab(tab){currentRosterTab=tab;document.querySelectorAll('.roster-tab').forEach((el,i)=>el.classList.toggle('active',['all','my'][i]===tab));renderRoster();}
+function switchRosterTab(tab){
+  currentRosterTab=tab;
+  document.querySelectorAll('.roster-tab').forEach((el,i)=>el.classList.toggle('active',['all','my'][i]===tab));
+  const analysisBox=document.getElementById('my-roster-analysis-box');
+  if(tab==='my'){
+    analysisBox.style.display='block';
+    if(!myRosterAnalysisGenerated) generateMyRosterAnalysis();
+  } else {
+    analysisBox.style.display='none';
+  }
+  renderRoster();
+}
+
+function regenerateMyRosterAnalysis(){
+  myRosterAnalysisGenerated=false;
+  generateMyRosterAnalysis();
+}
+
+async function generateMyRosterAnalysis(){
+  myRosterAnalysisGenerated=true;
+  const content=document.getElementById('my-roster-analysis-content');
+  const subtitle=document.getElementById('my-roster-analysis-subtitle');
+
+  const starredList=[...starred];
+  if(!starredList.length){
+    subtitle.textContent='';
+    content.innerHTML='<span style="color:#9b6fd4;font-size:13px;">Star artists using ☆ to build your roster, then come back here for a personalized analysis.</span>';
+    return;
+  }
+
+  const starredArtists=roster.filter(r=>starred.has(r.handle)&&r.status==='ok');
+  if(!starredArtists.length){
+    subtitle.textContent=`${starredList.length} starred`;
+    content.innerHTML='<span style="color:#9b6fd4;font-size:13px;">No follower data available yet for your starred artists — try refreshing.</span>';
+    return;
+  }
+
+  const periodLabel=currentPeriod===1?'last refresh':`${currentPeriod} days`;
+  subtitle.textContent=`${starredList.length} artist${starredList.length!==1?'s':''} · ${periodLabel}`;
+  content.innerHTML='<span style="color:#9b6fd4;font-size:13px;">Generating analysis...</span>';
+
+  const enriched=starredArtists.map(r=>{
+    const prev=getSnapVal(r.handle);
+    const diff=(r.followers!=null&&prev!=null)?r.followers-prev:null;
+    const p=(r.followers!=null&&prev!=null)?pct(r.followers,prev):null;
+    return{handle:r.handle,followers:r.followers,diff,pct:p};
+  });
+  enriched.sort((a,b)=>(b.diff??-Infinity)-(a.diff??-Infinity));
+
+  const gainers=enriched.filter(e=>e.diff>0);
+  const losers=enriched.filter(e=>e.diff<0);
+  const noData=enriched.filter(e=>e.diff===null);
+  const biggestGainer=gainers[0]||null;
+  const biggestDrop=losers.length?losers[losers.length-1]:null;
+  const totalFollowers=enriched.reduce((s,e)=>s+(e.followers||0),0);
+  const totalGrowth=enriched.filter(e=>e.diff!==null).reduce((s,e)=>s+e.diff,0);
+  const milestones=enriched.filter(e=>{
+    if(e.diff===null)return false;
+    const prevF=e.followers-e.diff;
+    return[100000,250000,500000,1000000,2000000,5000000,10000000].some(t=>prevF<t&&e.followers>=t);
+  });
+
+  const artistLines=enriched.map(e=>
+    `@${e.handle}: ${fmt(e.followers)} followers${e.diff!==null?`, ${e.diff>=0?'+':''}${Number(e.diff).toLocaleString()} (${e.pct!==null?(e.pct>=0?'+':'')+e.pct.toFixed(2)+'%':'—'})`:', no comparison data yet'}`
+  ).join('\n');
+
+  const prompt=`You are a music industry analyst giving a personal roster update to a label employee who has hand-picked ${starredArtists.length} artists to watch closely.
+
+Growth period: ${periodLabel}
+Total followers across their roster: ${fmt(totalFollowers)}
+Net follower change: ${totalGrowth>=0?'+':''}${Number(totalGrowth).toLocaleString()}
+Gainers: ${gainers.length} | Declining: ${losers.length} | No comparison data: ${noData.length}
+${biggestGainer?`Top performer: @${biggestGainer.handle} (+${Number(biggestGainer.diff).toLocaleString()}, +${biggestGainer.pct.toFixed(2)}%)`:''}
+${biggestDrop?`Biggest concern: @${biggestDrop.handle} (${Number(biggestDrop.diff).toLocaleString()}, ${biggestDrop.pct.toFixed(2)}%)`:''}
+${milestones.length>0?'Milestones hit: '+milestones.map(m=>'@'+m.handle).join(', '):'No milestones this period.'}
+
+Artist breakdown:
+${artistLines}
+
+Write 3-5 bullet points. Be specific and direct — call out standout momentum, anything needing attention, and any notable patterns across this particular group. Speak as if to the person who curated this list. Start each bullet with a dash. No intro or conclusion.`;
+
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
+    const lines=text.split('\n').filter(l=>l.trim());
+    content.innerHTML='<ul>'+lines.map(l=>`<li>${l.replace(/^[-•]\s*/,'')}</li>`).join('')+'</ul>';
+  }catch(e){
+    const bullets=[];
+    bullets.push(`Your ${starredArtists.length} tracked artists have ${fmt(totalFollowers)} total followers, with a net change of ${totalGrowth>=0?'+':''}${Number(totalGrowth).toLocaleString()} over the ${periodLabel}.`);
+    if(biggestGainer?.diff>0) bullets.push(`Top performer: @${biggestGainer.handle} added ${Number(biggestGainer.diff).toLocaleString()} followers (+${biggestGainer.pct.toFixed(2)}%).`);
+    if(biggestDrop?.diff<0) bullets.push(`Needs attention: @${biggestDrop.handle} lost ${Math.abs(biggestDrop.diff).toLocaleString()} followers (${biggestDrop.pct.toFixed(2)}%).`);
+    if(gainers.length>0) bullets.push(`${gainers.length} of ${starredArtists.length} artists gained followers this period.`);
+    if(milestones.length>0) bullets.push(`Milestone: ${milestones.map(m=>'@'+m.handle).join(', ')} crossed a major follower threshold.`);
+    content.innerHTML='<ul>'+bullets.map(b=>`<li>${b}</li>`).join('')+'</ul>';
+  }
+}
 
 function sortBy(field){
   if(currentSort.field===field){currentSort.dir=currentSort.dir==='desc'?'asc':'desc';}
@@ -366,6 +489,7 @@ async function refreshAll(){
   }
   pb.style.display='none';btn.disabled=false;btn.textContent='↻ Refresh all';
   updateLastUpdated();await persistRoster();
+  if(currentRosterTab==='my'){myRosterAnalysisGenerated=false;generateMyRosterAnalysis();}
 }
 
 async function saveSnapshot(){
@@ -404,15 +528,7 @@ function downloadPDF(){
     const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'—';
     return[idx+1,`@${r.handle}`,fmt(r.followers),growth,growthPct];
   });
-  doc.autoTable({
-    startY:34,
-    head:[['#','Handle','Followers','Follower Growth','Follower Growth %']],
-    body:tableData,
-    styles:{fontSize:10,cellPadding:3},
-    headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},
-    alternateRowStyles:{fillColor:[249,249,247]},
-    columnStyles:{0:{cellWidth:12},1:{cellWidth:60},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:40}}
-  });
+  doc.autoTable({startY:34,head:[['#','Handle','Followers','Follower Growth','Follower Growth %']],body:tableData,styles:{fontSize:10,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:12},1:{cellWidth:60},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:40}}});
   doc.save(`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.pdf`);
 }
 
@@ -445,15 +561,7 @@ function downloadReportPDF(){
     const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'first entry';
     return[idx+1,`@${r.handle}`,fmt(r.followers),growth,growthPct];
   });
-  doc.autoTable({
-    startY,
-    head:[['#','Handle','Followers','Follower Growth','Follower Growth %']],
-    body:tableData,
-    styles:{fontSize:10,cellPadding:3},
-    headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},
-    alternateRowStyles:{fillColor:[249,249,247]},
-    columnStyles:{0:{cellWidth:12},1:{cellWidth:60},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:40}}
-  });
+  doc.autoTable({startY,head:[['#','Handle','Followers','Follower Growth','Follower Growth %']],body:tableData,styles:{fontSize:10,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:12},1:{cellWidth:60},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:40}}});
   doc.save(`Alamo-Weekly-Report-${getFileDateStr()}.pdf`);
 }
 
