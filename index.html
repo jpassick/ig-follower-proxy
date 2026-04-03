@@ -302,7 +302,6 @@ function setPeriod(days) {
 function getSnapshotPair() {
   if(!snapshots.length) return null;
   const latest=snapshots[snapshots.length-1];
-  if(currentPeriod===1) return { latest, prev: snapshots.length>1?snapshots[snapshots.length-2]:null };
   const cutoff=latest.ts-(currentPeriod*24*60*60*1000);
   let best=null;
   for(let i=snapshots.length-2;i>=0;i--) { if(snapshots[i].ts<=cutoff){best=snapshots[i];break;} best=snapshots[i]; }
