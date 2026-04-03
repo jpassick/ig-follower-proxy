@@ -358,7 +358,7 @@ async function generateMyRosterAnalysis(){
     return;
   }
 
-  const periodLabel=currentPeriod===1?'last refresh':`${currentPeriod} days`;
+  const periodLabel=currentPeriod===1?'24 hours':`${currentPeriod} days`;
   subtitle.textContent=`${starredList.length} artist${starredList.length!==1?'s':''} · ${periodLabel}`;
   content.innerHTML='<span style="color:#9b6fd4;font-size:13px;">Generating analysis...</span>';
 
