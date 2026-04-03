@@ -76,6 +76,7 @@ export default async function handler(req, res) {
   const snap = {
     date: now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' }),
     ts: Date.now(),
+    type: 'weekly',
     data: roster.filter(r => r.followers != null).map(r => ({ handle: r.handle, followers: r.followers }))
   };
   snapshots.push(snap);
