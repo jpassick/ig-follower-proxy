@@ -26,7 +26,6 @@ export default async function handler(req, res) {
   if (!snapshots.length) return res.status(400).json({ error: 'No snapshots to report on' });
 
   const latest = snapshots[snapshots.length - 1];
-  const prev = snapshots.length > 1 ? snapshots[snapshots.length - 2] : null;
 
   const fmt = (n) => {
     if (n == null) return '—';
@@ -35,32 +34,50 @@ export default async function handler(req, res) {
     return Number(n).toLocaleString();
   };
 
-  const withGrowth = latest.data.map(d => {
-    const pe = prev ? prev.data.find(p => p.handle === d.handle) : null;
-    const diff = pe ? d.followers - pe.followers : null;
-    const pct = pe ? ((d.followers - pe.followers) / pe.followers * 100) : null;
-    return { ...d, diff, pct };
-  }).sort((a, b) => (b.diff ?? -Infinity) - (a.diff ?? -Infinity));
+  // Find the snapshot closest to X hours ago
+  function getSnapshotForWindow(hoursAgo) {
+    const cutoff = latest.ts - (hoursAgo * 60 * 60 * 1000);
+    let best = null;
+    for (let i = snapshots.length - 2; i >= 0; i--) {
+      if (snapshots[i].ts <= cutoff) { best = snapshots[i]; break; }
+      best = snapshots[i];
+    }
+    return best;
+  }
 
-  const rows = withGrowth.map(d => {
-    const growthStr = d.diff !== null ? `${d.diff >= 0 ? '+' : ''}${Number(d.diff).toLocaleString()}` : '—';
-    const pctStr = d.pct !== null ? `${d.pct >= 0 ? '+' : ''}${d.pct.toFixed(2)}%` : '—';
-    const color = d.diff > 0 ? '#27ae60' : d.diff < 0 ? '#c0392b' : '#888';
-    return `<tr>
-      <td style="padding:8px 12px;border-bottom:1px solid #eee;"><a href="https://www.instagram.com/${d.handle}/" style="color:#1a1a1a;text-decoration:none;">@${d.handle}</a></td>
-      <td style="padding:8px 12px;border-bottom:1px solid #eee;font-weight:600;">${fmt(d.followers)}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #eee;color:${color};">${growthStr}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #eee;color:${color};">${pctStr}</td>
-    </tr>`;
-  }).join('');
+  const prev24h  = getSnapshotForWindow(24);
+  const prev7d   = getSnapshotForWindow(24 * 7);
+  const prev30d  = getSnapshotForWindow(24 * 30);
 
-  const html = `
-    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:2rem;">
-      <div style="text-align:center;margin-bottom:2rem;">
-        <a href="https://ig-follower-proxy.vercel.app" style="display:inline-block;background:#1a1a1a;color:#fff;font-size:13px;font-weight:500;padding:10px 24px;border-radius:8px;text-decoration:none;letter-spacing:0.03em;">View Live Dashboard →</a>
-      </div>
-      <h1 style="font-size:20px;font-weight:600;margin-bottom:4px;">Instagram Weekly Report</h1>
-      <p style="font-size:13px;color:#888;margin-bottom:1.5rem;">Alamo Records / Santa Anna Roster — ${latest.date}</p>
+  function buildSection(title, dateRange, prevSnap) {
+    const withGrowth = latest.data.map(d => {
+      const pe = prevSnap ? prevSnap.data.find(p => p.handle === d.handle) : null;
+      const diff = pe ? d.followers - pe.followers : null;
+      const pct = pe ? ((d.followers - pe.followers) / pe.followers * 100) : null;
+      return { ...d, diff, pct };
+    }).filter(d => d.diff !== null)
+      .sort((a, b) => (b.diff ?? -Infinity) - (a.diff ?? -Infinity));
+
+    if (!withGrowth.length) return `
+      <h2 style="font-size:16px;font-weight:600;margin:2rem 0 4px;">${title}</h2>
+      <p style="font-size:13px;color:#aaa;margin-bottom:1rem;">${dateRange}</p>
+      <p style="font-size:13px;color:#aaa;">Not enough snapshot history yet for this window.</p>`;
+
+    const rows = withGrowth.map(d => {
+      const growthStr = d.diff !== null ? `${d.diff >= 0 ? '+' : ''}${Number(d.diff).toLocaleString()}` : '—';
+      const pctStr = d.pct !== null ? `${d.pct >= 0 ? '+' : ''}${d.pct.toFixed(2)}%` : '—';
+      const color = d.diff > 0 ? '#27ae60' : d.diff < 0 ? '#c0392b' : '#888';
+      return `<tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;"><a href="https://www.instagram.com/${d.handle}/" style="color:#1a1a1a;text-decoration:none;">@${d.handle}</a></td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-weight:600;">${fmt(d.followers)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;color:${color};">${growthStr}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;color:${color};">${pctStr}</td>
+      </tr>`;
+    }).join('');
+
+    return `
+      <h2 style="font-size:16px;font-weight:600;margin:2rem 0 4px;">${title}</h2>
+      <p style="font-size:13px;color:#888;margin-bottom:1rem;">${dateRange}</p>
       <table style="width:100%;border-collapse:collapse;font-size:14px;">
         <thead>
           <tr style="background:#f9f9f7;">
@@ -71,8 +88,42 @@ export default async function handler(req, res) {
           </tr>
         </thead>
         <tbody>${rows}</tbody>
-      </table>
-      <p style="font-size:12px;color:#aaa;margin-top:1.5rem;text-align:center;">Auto-generated by Alamo IG Tracker</p>
+      </table>`;
+  }
+
+  function formatDate(ts) {
+    return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
+  }
+
+  const section24h = buildSection(
+    '24 Hour Growth',
+    prev24h ? `${formatDate(prev24h.ts)} → ${formatDate(latest.ts)}` : 'Not enough data yet',
+    prev24h
+  );
+
+  const section7d = buildSection(
+    '7 Day Growth',
+    prev7d ? `${formatDate(prev7d.ts)} → ${formatDate(latest.ts)}` : 'Not enough data yet',
+    prev7d
+  );
+
+  const section30d = buildSection(
+    '30 Day Growth',
+    prev30d ? `${formatDate(prev30d.ts)} → ${formatDate(latest.ts)}` : 'Not enough data yet',
+    prev30d
+  );
+
+  const html = `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:2rem;">
+      <div style="text-align:center;margin-bottom:2rem;">
+        <a href="https://ig-follower-proxy.vercel.app" style="display:inline-block;background:#1a1a1a;color:#fff;font-size:13px;font-weight:500;padding:10px 24px;border-radius:8px;text-decoration:none;letter-spacing:0.03em;">View Live Dashboard →</a>
+      </div>
+      <h1 style="font-size:20px;font-weight:600;margin-bottom:4px;">Instagram Weekly Report</h1>
+      <p style="font-size:13px;color:#888;margin-bottom:2rem;">Alamo Records / Santa Anna Roster — ${latest.date}</p>
+      ${section24h}
+      ${section7d}
+      ${section30d}
+      <p style="font-size:12px;color:#aaa;margin-top:2rem;text-align:center;">Auto-generated by Alamo IG Tracker</p>
     </div>`;
 
   const emailRes = await fetch('https://api.resend.com/emails', {
