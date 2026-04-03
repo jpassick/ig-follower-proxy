@@ -491,12 +491,12 @@ async function refreshAll(){
   if(currentRosterTab==='my'){myRosterAnalysisGenerated=false;generateMyRosterAnalysis();}
 }
 
-async function saveSnapshot(){
+async function saveSnapshot(silent=false){
   const valid=roster.filter(r=>r.followers!=null);
-  if(!valid.length){showErr('No data yet.');return;}
+  if(!valid.length){if(!silent)showErr('No data yet.');return;}
   const snap={date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),ts:Date.now(),data:valid.map(r=>({handle:r.handle,followers:r.followers}))};
   snapshots.push(snap);await persistSnapshots();renderReport();
-  alert('Snapshot saved — '+snap.date);
+  if(!silent)alert('Snapshot saved — '+snap.date);
 }
 
 async function sendEmailNow(){
