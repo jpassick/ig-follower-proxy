@@ -487,6 +487,7 @@ async function refreshAll(){
   }
   pb.style.display='none';btn.disabled=false;btn.textContent='↻ Refresh all';
   updateLastUpdated();await persistRoster();
+  await saveSnapshot(true);
   if(currentRosterTab==='my'){myRosterAnalysisGenerated=false;generateMyRosterAnalysis();}
 }
 
