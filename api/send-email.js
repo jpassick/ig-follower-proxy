@@ -34,78 +34,53 @@ export default async function handler(req, res) {
     return Number(n).toLocaleString();
   };
 
-  function getSnapshotForWindow(hoursAgo) {
-    const cutoff = latest.ts - (hoursAgo * 60 * 60 * 1000);
-    let best = null;
-    for (let i = snapshots.length - 2; i >= 0; i--) {
-      if (snapshots[i].ts <= cutoff) { best = snapshots[i]; break; }
-      best = snapshots[i];
-    }
-    return best;
-  }
-
   function formatDate(ts) {
     return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
   }
 
-  function growthCell(current, prevSnap, handle) {
-    const pe = prevSnap ? prevSnap.data.find(p => p.handle === handle) : null;
-    if (!pe) return { diff: null, pct: null };
-    const diff = current - pe.followers;
-    const pct = (diff / pe.followers) * 100;
-    return { diff, pct };
+  // Find snapshot closest to 7 days ago
+  const cutoff = latest.ts - (7 * 24 * 60 * 60 * 1000);
+  let prev = null;
+  for (let i = snapshots.length - 2; i >= 0; i--) {
+    if (snapshots[i].ts <= cutoff) { prev = snapshots[i]; break; }
+    prev = snapshots[i];
   }
 
-  function renderCell(diff, pct) {
-    if (diff === null) return '<td style="padding:8px 12px;border-bottom:1px solid #eee;color:#ccc;font-size:13px;">—</td>';
-    const color = diff > 0 ? '#27ae60' : diff < 0 ? '#c0392b' : '#888';
-    const sign = diff >= 0 ? '+' : '';
-    return `<td style="padding:8px 12px;border-bottom:1px solid #eee;color:${color};font-size:13px;">${sign}${Number(diff).toLocaleString()} (${sign}${pct.toFixed(2)}%)</td>`;
-  }
+  const withGrowth = latest.data.map(d => {
+    const pe = prev ? prev.data.find(p => p.handle === d.handle) : null;
+    const diff = pe ? d.followers - pe.followers : null;
+    const pct = pe ? ((d.followers - pe.followers) / pe.followers * 100) : null;
+    return { ...d, diff, pct };
+  }).sort((a, b) => (b.diff ?? -Infinity) - (a.diff ?? -Infinity));
 
-  const prev24h = getSnapshotForWindow(24);
-  const prev7d  = getSnapshotForWindow(24 * 7);
-  const prev30d = getSnapshotForWindow(24 * 30);
+  const dateRange = prev ? `${formatDate(prev.ts)} → ${formatDate(latest.ts)}` : latest.date;
 
-  // Build combined rows sorted by 7d growth
-  const combined = latest.data.map(d => {
-    const g24 = growthCell(d.followers, prev24h, d.handle);
-    const g7  = growthCell(d.followers, prev7d,  d.handle);
-    const g30 = growthCell(d.followers, prev30d, d.handle);
-    return { ...d, g24, g7, g30 };
-  }).sort((a, b) => (b.g7.diff ?? -Infinity) - (a.g7.diff ?? -Infinity));
-
-  const rows = combined.map(d => `
-    <tr>
+  const rows = withGrowth.map(d => {
+    const color = d.diff > 0 ? '#27ae60' : d.diff < 0 ? '#c0392b' : '#888';
+    const sign = d.diff >= 0 ? '+' : '';
+    const growthStr = d.diff !== null ? `${sign}${Number(d.diff).toLocaleString()} (${sign}${d.pct.toFixed(2)}%)` : '—';
+    return `<tr>
       <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px;">
         <a href="https://www.instagram.com/${d.handle}/" style="color:#1a1a1a;text-decoration:none;">@${d.handle}</a>
       </td>
       <td style="padding:8px 12px;border-bottom:1px solid #eee;font-weight:600;font-size:13px;">${fmt(d.followers)}</td>
-      ${renderCell(d.g24.diff, d.g24.pct)}
-      ${renderCell(d.g7.diff,  d.g7.pct)}
-      ${renderCell(d.g30.diff, d.g30.pct)}
-    </tr>`).join('');
-
-  const th = (label, sub) => `
-    <th style="text-align:left;padding:8px 12px;font-size:11px;color:#888;font-weight:500;border-bottom:2px solid #eee;">
-      ${label}<br/><span style="font-weight:400;color:#bbb;">${sub}</span>
-    </th>`;
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;color:${color};font-size:13px;">${growthStr}</td>
+    </tr>`;
+  }).join('');
 
   const html = `
-    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:700px;margin:0 auto;padding:2rem;">
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:2rem;">
       <div style="text-align:center;margin-bottom:2rem;">
         <a href="https://ig-follower-proxy.vercel.app" style="display:inline-block;background:#1a1a1a;color:#fff;font-size:13px;font-weight:500;padding:10px 24px;border-radius:8px;text-decoration:none;letter-spacing:0.03em;">View Live Dashboard →</a>
       </div>
       <h1 style="font-size:20px;font-weight:600;margin-bottom:4px;">Instagram Weekly Report</h1>
-      <p style="font-size:13px;color:#888;margin-bottom:1.5rem;">Alamo Records / Santa Anna Roster — ${latest.date}</p>
+      <p style="font-size:13px;color:#888;margin-bottom:1.5rem;">Alamo Records / Santa Anna Roster — ${dateRange}</p>
       <table style="width:100%;border-collapse:collapse;">
         <thead>
           <tr style="background:#f9f9f7;">
-            ${th('Handle', '')}
-            ${th('Followers', '')}
-            ${th('24h Growth', prev24h ? `${formatDate(prev24h.ts)} → ${formatDate(latest.ts)}` : 'not enough data')}
-            ${th('7d Growth',  prev7d  ? `${formatDate(prev7d.ts)}  → ${formatDate(latest.ts)}` : 'not enough data')}
-            ${th('30d Growth', prev30d ? `${formatDate(prev30d.ts)} → ${formatDate(latest.ts)}` : 'not enough data')}
+            <th style="text-align:left;padding:8px 12px;font-size:12px;color:#888;font-weight:500;border-bottom:2px solid #eee;">Handle</th>
+            <th style="text-align:left;padding:8px 12px;font-size:12px;color:#888;font-weight:500;border-bottom:2px solid #eee;">Followers</th>
+            <th style="text-align:left;padding:8px 12px;font-size:12px;color:#888;font-weight:500;border-bottom:2px solid #eee;">7 Day Growth</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -119,7 +94,7 @@ export default async function handler(req, res) {
     body: JSON.stringify({
       from: 'Alamo IG Tracker <onboarding@resend.dev>',
       to: ['jacobpassickdigital@gmail.com'],
-      subject: `Alamo IG Weekly Report — ${latest.date}`,
+      subject: `Alamo IG Weekly Report — ${dateRange}`,
       html
     })
   });
