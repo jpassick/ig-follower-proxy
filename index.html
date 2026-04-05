@@ -592,8 +592,8 @@ function renderReport(){
   const tbody=document.getElementById('report-rows'),dateEl=document.getElementById('report-date');
   if(!snapshots.length){tbody.innerHTML='<tr><td colspan="5" class="muted" style="font-size:13px;padding:12px 0;">No snapshots yet.</td></tr>';return;}
   const weekly=snapshots.filter(s=>s.type==='weekly');
-  const latest=weekly.length?weekly[weekly.length-1]:snapshots[snapshots.length-1];
-  const prev=weekly.length>1?weekly[weekly.length-2]:null;
+  const latest=snapshots[snapshots.length-1];
+  const prev=weekly.length>1?weekly[weekly.length-2]:snapshots[0];
   dateEl.textContent=latest.date;generateHighlights(latest,prev);
   const sorted=[...latest.data].sort((a,b)=>b.followers-a.followers);
   tbody.innerHTML=sorted.map((d,idx)=>{
