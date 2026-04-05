@@ -150,7 +150,10 @@
     <div class="my-roster-analysis-box" id="my-roster-analysis-box" style="display:none;">
       <div class="my-roster-analysis-header">
         <div class="my-roster-analysis-title">★ My Roster Analysis</div>
-        <button class="analysis-regen-btn" onclick="regenerateMyRosterAnalysis()">↻ Regenerate</button>
+       function regenerateMyRosterAnalysis(){
+        myRosterAnalysisGenerated=false;
+        generateMyRosterAnalysis();
+       }
       </div>
       <div class="my-roster-analysis-subtitle" id="my-roster-analysis-subtitle"></div>
       <div class="my-roster-analysis-content" id="my-roster-analysis-content"></div>
