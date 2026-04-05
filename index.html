@@ -223,7 +223,6 @@ function toggleStar(handle) {
   myRosterAnalysisGenerated = false;
   renderRoster();
   if(currentRosterTab === 'my') generateMyRosterAnalysis();
-}
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function proxyUrl(url) { if(!url) return ''; return `/api/proxy-image?url=${encodeURIComponent(url)}`; }
 
