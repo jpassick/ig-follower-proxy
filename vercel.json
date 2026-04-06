@@ -3,11 +3,21 @@
     {
       "path": "/api/cron-snapshot-daily",
       "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron-snapshot",
+      "schedule": "0 15 * * 1"
     }
   ],
   "functions": {
     "api/cron-snapshot-daily.js": {
-      "maxDuration": 120
+      "maxDuration": 300
+    },
+    "api/cron-snapshot.js": {
+      "maxDuration": 300
+    },
+    "api/followers.js": {
+      "maxDuration": 30
     }
   }
 }
