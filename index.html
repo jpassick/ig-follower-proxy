@@ -635,7 +635,7 @@ async function anrImportCSV(event){
   const handles=[];
   for(const line of lines){
     const cols=line.split(',');
-    const raw=cols[0].replace(/@/g,'').replace(/"/g,'').trim().toLowerCase();
+    const raw=cols[0].replace(/@/g,'').replace(/"/g,'').replace(/,/g,'').trim().toLowerCase();
     if(raw&&raw!=='handle'&&raw!=='username'&&raw!=='account') handles.push(raw);
   }
   const newHandles=handles.filter(h=>!anrRoster.find(r=>r.handle===h));
