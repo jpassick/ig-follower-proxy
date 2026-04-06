@@ -920,7 +920,7 @@ function switchTab(tab){
   document.getElementById('view-anr').style.display=tab==='anr'?'':'none';
   if(tab==='report') renderReport();
   if(tab==='anr'){
-    if(anrUnlocked){ document.getElementById('anr-gate').style.display='none'; document.getElementById('anr-content').style.display='block'; loadAnrAll(); }
+    if(anrUnlocked){ document.getElementById('anr-gate').style.display='none'; document.getElementById('anr-content').style.display='block'; if(!anrRoster.length) loadAnrAll(); }
     else { document.getElementById('anr-gate').style.display='block'; document.getElementById('anr-content').style.display='none'; }
   }
 }
