@@ -338,7 +338,6 @@ document.getElementById('pw-input').addEventListener('keydown', e => { if(e.key=
 const savedAuth = sessionStorage.getItem('ig_auth');
 if (savedAuth==='admin') { isAdmin=true; showApp(); } else if (savedAuth==='viewer') { isAdmin=false; showApp(); }
 
-// A&R Password
 function checkAnrPassword() {
   const val = document.getElementById('anr-pw-input').value;
   if (val === ANR_PASSWORD) {
@@ -349,6 +348,7 @@ function checkAnrPassword() {
     document.getElementById('anr-pw-err').style.display = 'block';
   }
 }
+
 document.addEventListener('DOMContentLoaded', () => {
   const anrPwInput = document.getElementById('anr-pw-input');
   if (anrPwInput) anrPwInput.addEventListener('keydown', e => { if(e.key==='Enter') checkAnrPassword(); });
@@ -423,7 +423,6 @@ async function persistAnrSnapshots() {
   try { await fetch('/api/anr-snapshots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snapshots:anrSnapshots})}); } catch(e) {}
 }
 
-// ── PERIOD ──
 function setPeriod(days) {
   currentPeriod=days;
   document.querySelectorAll('.period-tab').forEach(el=>el.classList.remove('active'));
@@ -479,7 +478,6 @@ function getAnrSnapVal(handle){
   return e?e.followers:null;
 }
 
-// ── ROSTER TABS ──
 function switchRosterTab(tab){
   currentRosterTab=tab;
   document.querySelectorAll('.roster-tab').forEach((el,i)=>el.classList.toggle('active',['all','my'][i]===tab));
@@ -489,7 +487,6 @@ function switchRosterTab(tab){
   renderRoster();
 }
 
-// ── SORT ──
 function sortBy(field){
   if(currentSort.field===field){currentSort.dir=currentSort.dir==='desc'?'asc':'desc';}
   else{currentSort.field=field;currentSort.dir=(field==='followers'||field==='growth'||field==='pct')?'desc':'asc';}
@@ -509,17 +506,40 @@ function sortAnrBy(field){
 }
 
 function getSortedRoster(filterStarred=false){
-  let list=[...roster].map((r,i)=>{const prev=getSnapVal(r.handle),diff=(r.followers!=null&&prev!=null)?r.followers-prev:null,p=(r.followers!=null&&prev!=null)?pct(r.followers,prev):null;return{...r,_origIndex:i,_diff:diff,_pct:p};});
+  let list=[...roster].map((r,i)=>{
+    const prev=getSnapVal(r.handle),diff=(r.followers!=null&&prev!=null)?r.followers-prev:null,p=(r.followers!=null&&prev!=null)?pct(r.followers,prev):null;
+    return{...r,_origIndex:i,_diff:diff,_pct:p};
+  });
   if(filterStarred) list=list.filter(r=>starred.has(r.handle));
-  return list.sort((a,b)=>{let av,bv;if(currentSort.field==='followers'){
+  return list.sort((a,b)=>{
+    let av,bv;
+    if(currentSort.field==='followers'){av=a.followers||0;bv=b.followers||0;}
+    else if(currentSort.field==='growth'){av=a._diff??-Infinity;bv=b._diff??-Infinity;}
+    else if(currentSort.field==='pct'){av=a._pct??-Infinity;bv=b._pct??-Infinity;}
+    else{av=a.handle||'';bv=b.handle||'';}
+    if(av<bv)return currentSort.dir==='asc'?-1:1;
+    if(av>bv)return currentSort.dir==='asc'?1:-1;
+    return 0;
+  });
 }
 
 function getSortedAnrRoster(){
-  let list=[...anrRoster].map((r,i)=>{const prev=getAnrSnapVal(r.handle),diff=(r.followers!=null&&prev!=null)?r.followers-prev:null,p=(r.followers!=null&&prev!=null)?pct(r.followers,prev):null;return{...r,_origIndex:i,_diff:diff,_pct:p};});
-  return list.sort((a,b)=>{let av,bv;if(anrCurrentSort.field==='followers'){av=a.followers||0;bv=b.followers||0;}else if(anrCurrentSort.field==='growth'){av=a._diff??-Infinity;bv=b._diff??-Infinity;}else if(anrCurrentSort.field==='pct'){av=a._pct??-Infinity;bv=b._pct??-Infinity;}else{av=a.handle||'';bv=b.handle||'';}if(av<bv)return anrCurrentSort.dir==='asc'?-1:1;if(av>bv)return anrCurrentSort.dir==='asc'?1:-1;return 0;});
+  let list=[...anrRoster].map((r,i)=>{
+    const prev=getAnrSnapVal(r.handle),diff=(r.followers!=null&&prev!=null)?r.followers-prev:null,p=(r.followers!=null&&prev!=null)?pct(r.followers,prev):null;
+    return{...r,_origIndex:i,_diff:diff,_pct:p};
+  });
+  return list.sort((a,b)=>{
+    let av,bv;
+    if(anrCurrentSort.field==='followers'){av=a.followers||0;bv=b.followers||0;}
+    else if(anrCurrentSort.field==='growth'){av=a._diff??-Infinity;bv=b._diff??-Infinity;}
+    else if(anrCurrentSort.field==='pct'){av=a._pct??-Infinity;bv=b._pct??-Infinity;}
+    else{av=a.handle||'';bv=b.handle||'';}
+    if(av<bv)return anrCurrentSort.dir==='asc'?-1:1;
+    if(av>bv)return anrCurrentSort.dir==='asc'?1:-1;
+    return 0;
+  });
 }
 
-// ── RENDER ROSTER ──
 function renderRoster(){
   const tbody=document.getElementById('roster-body');
   const isMyRoster=currentRosterTab==='my',sorted=getSortedRoster(isMyRoster),cols=isAdmin?7:6;
@@ -537,7 +557,6 @@ function renderRoster(){
   }).join('');
 }
 
-// ── RENDER A&R ROSTER ──
 function renderAnrRoster(){
   const tbody=document.getElementById('anr-roster-body');
   if(!anrRoster.length){tbody.innerHTML=`<tr><td colspan="8" class="muted" style="padding:12px 0;font-size:13px;">No prospects added yet — add a handle or import a CSV.</td></tr>`;return;}
@@ -572,7 +591,6 @@ function editAnrNote(i){
   renderAnrRoster(); persistAnrRoster();
 }
 
-// ── FETCH ──
 async function fetchFollowers(handle){
   const res=await fetch(`/api/followers?username=${encodeURIComponent(handle)}`);
   if(!res.ok) throw new Error(`Server error ${res.status}`);
@@ -584,7 +602,6 @@ async function fetchFollowers(handle){
 function showErr(msg){const el=document.getElementById('err-box');el.textContent=msg;el.style.display='block';setTimeout(()=>{el.style.display='none';},7000);}
 function showAnrErr(msg){const el=document.getElementById('anr-err-box');el.textContent=msg;el.style.display='block';setTimeout(()=>{el.style.display='none';},7000);}
 
-// ── ADD HANDLE ──
 async function addHandle(){
   const input=document.getElementById('add-input'),handle=input.value.trim().replace('@','').toLowerCase();
   if(!handle)return;
@@ -609,7 +626,6 @@ async function anrAddHandle(){
   renderAnrRoster();await persistAnrRoster();
 }
 
-// ── CSV IMPORT ──
 async function anrImportCSV(event){
   const file=event.target.files[0]; if(!file) return;
   const statusEl=document.getElementById('anr-csv-status');
@@ -638,11 +654,9 @@ async function anrImportCSV(event){
   event.target.value='';
 }
 
-// ── REMOVE ──
 async function removeHandle(i){roster.splice(i,1);renderRoster();await persistRoster();}
 async function anrRemoveHandle(i){anrRoster.splice(i,1);renderAnrRoster();await persistAnrRoster();}
 
-// ── REFRESH ALL ──
 async function refreshAll(){
   const btn=document.getElementById('refresh-btn'),pb=document.getElementById('progress-bar'),pf=document.getElementById('progress-fill');
   btn.disabled=true;btn.textContent='Refreshing...';pb.style.display='block';pf.style.width='0%';
@@ -694,42 +708,25 @@ async function saveAnrSnapshot(silent=false){
   await persistAnrSnapshots();
 }
 
-// ── A&R AI ANALYSIS ──
 async function generateAnrAnalysis(){
   if(!anrRoster.length) return;
   const box=document.getElementById('anr-analysis-box'),content=document.getElementById('anr-analysis-content');
   box.style.display='block';content.innerHTML='<span style="color:#888;font-size:13px;">Generating A&R analysis...</span>';
-
   const enriched=anrRoster.filter(r=>r.status==='ok').map(r=>{
     const prev=getAnrSnapVal(r.handle);
     const diff=(r.followers!=null&&prev!=null)?r.followers-prev:null;
     const p=(r.followers!=null&&prev!=null)?pct(r.followers,prev):null;
     return{handle:r.handle,followers:r.followers,diff,pct:p,genre:r.genre||'',note:r.note||''};
   });
-
   if(!enriched.length){content.innerHTML='<span style="color:#888;font-size:13px;">Add prospects and refresh to see analysis.</span>';return;}
-
   enriched.sort((a,b)=>(b.diff??-Infinity)-(a.diff??-Infinity));
   const gainers=enriched.filter(e=>e.diff>0);
   const total=enriched.reduce((s,e)=>s+(e.followers||0),0);
   const totalGrowth=enriched.filter(e=>e.diff!==null).reduce((s,e)=>s+e.diff,0);
-
   const artistLines=enriched.slice(0,20).map(e=>
-    `@${e.handle}${e.genre?` (${e.genre})`''}: ${fmt(e.followers)} followers${e.diff!==null?`, ${e.diff>=0?'+':''}${Number(e.diff).toLocaleString()}`:', no comparison data'}`
+    `@${e.handle}${e.genre?' ('+e.genre+')':''}: ${fmt(e.followers)} followers${e.diff!==null?', '+(e.diff>=0?'+':'')+Number(e.diff).toLocaleString():', no comparison data'}`
   ).join('\n');
-
-  const prompt=`You are an A&R analyst at a major record label reviewing a list of unsigned Instagram prospects.
-
-Total prospects tracked: ${enriched.length}
-Combined followers: ${fmt(total)}
-Net growth this period: ${totalGrowth>=0?'+':''}${Number(totalGrowth).toLocaleString()}
-Gaining momentum: ${gainers.length} prospects
-
-Top prospects by follower growth:
-${artistLines}
-
-Write 3-5 bullet points identifying the strongest prospects, fastest-growing accounts, and any patterns worth noting for signing consideration. Be direct and specific. Start each bullet with a dash. No intro or conclusion.`;
-
+  const prompt=`You are an A&R analyst at a major record label reviewing a list of unsigned Instagram prospects.\n\nTotal prospects tracked: ${enriched.length}\nCombined followers: ${fmt(total)}\nNet growth this period: ${totalGrowth>=0?'+':''}${Number(totalGrowth).toLocaleString()}\nGaining momentum: ${gainers.length} prospects\n\nTop prospects by follower growth:\n${artistLines}\n\nWrite 3-5 bullet points identifying the strongest prospects, fastest-growing accounts, and any patterns worth noting for signing consideration. Be direct and specific. Start each bullet with a dash. No intro or conclusion.`;
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content:prompt}]})});
     const data=await res.json();
@@ -737,11 +734,10 @@ Write 3-5 bullet points identifying the strongest prospects, fastest-growing acc
     const lines=text.split('\n').filter(l=>l.trim());
     content.innerHTML='<ul>'+lines.map(l=>`<li>${l.replace(/^[-•]\s*/,'')}</li>`).join('')+'</ul>';
   }catch(e){
-    content.innerHTML=`<ul><li>${enriched.length} prospects tracked with ${fmt(total)} combined followers.</li>${gainers.length?`<li>Top prospect by growth: @${gainers[0].handle} (+${Number(gainers[0].diff).toLocaleString()})</li>`':''}</ul>`;
+    content.innerHTML=`<ul><li>${enriched.length} prospects tracked with ${fmt(total)} combined followers.</li>${gainers.length?`<li>Top prospect by growth: @${gainers[0].handle} (+${Number(gainers[0].diff).toLocaleString()})</li>`:''}</ul>`;
   }
 }
 
-// ── A&R CSV DOWNLOAD ──
 function anrDownloadCSV(){
   const sorted=getSortedAnrRoster();
   let csv='Rank,Handle,Followers,Growth,Growth %,Genre,Notes\n';
@@ -754,7 +750,6 @@ function anrDownloadCSV(){
   a.href=url;a.download=`ANR-Prospects-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
 }
 
-// ── MY ROSTER ANALYSIS ──
 function regenerateMyRosterAnalysis(){myRosterAnalysisGenerated=false;generateMyRosterAnalysis();}
 
 async function generateMyRosterAnalysis(){
@@ -774,8 +769,8 @@ async function generateMyRosterAnalysis(){
   const biggestGainer=gainers[0]||null,biggestDrop=losers.length?losers[losers.length-1]:null;
   const totalFollowers=enriched.reduce((s,e)=>s+(e.followers||0),0),totalGrowth=enriched.filter(e=>e.diff!==null).reduce((s,e)=>s+e.diff,0);
   const milestones=enriched.filter(e=>{if(e.diff===null)return false;const prevF=e.followers-e.diff;return[100000,250000,500000,1000000,2000000,5000000,10000000].some(t=>prevF<t&&e.followers>=t);});
-  const artistLines=enriched.map(e=>`@${e.handle}: ${fmt(e.followers)} followers${e.diff!==null?`, ${e.diff>=0?'+':''}${Number(e.diff).toLocaleString()} (${e.pct!==null?(e.pct>=0?'+':'')+e.pct.toFixed(2)+'%':'—'})`:', no comparison data yet'}`).join('\n');
-  const prompt=`You are a music industry analyst giving a personal roster update to a label employee who has hand-picked ${starredArtists.length} artists to watch closely.\n\nGrowth period: ${periodLabel}\nTotal followers across their roster: ${fmt(totalFollowers)}\nNet follower change: ${totalGrowth>=0?'+':''}${Number(totalGrowth).toLocaleString()}\nGainers: ${gainers.length} | Declining: ${losers.length} | No comparison data: ${noData.length}\n${biggestGainer?`Top performer: @${biggestGainer.handle} (+${Number(biggestGainer.diff).toLocaleString()}, +${biggestGainer.pct.toFixed(2)}%)`':''}\n${biggestDrop?`Biggest concern: @${biggestDrop.handle} (${Number(biggestDrop.diff).toLocaleString()}, ${biggestDrop.pct.toFixed(2)}%)`':''}\n${milestones.length>0?'Milestones hit: '+milestones.map(m=>'@'+m.handle).join(', '):'No milestones this period.'}\n\nArtist breakdown:\n${artistLines}\n\nWrite 3-5 bullet points. Be specific and direct. Start each bullet with a dash. No intro or conclusion.`;
+  const artistLines=enriched.map(e=>`@${e.handle}: ${fmt(e.followers)} followers${e.diff!==null?', '+(e.diff>=0?'+':'')+Number(e.diff).toLocaleString()+' ('+(e.pct!==null?(e.pct>=0?'+':'')+e.pct.toFixed(2)+'%':'—')+')':', no comparison data yet'}`).join('\n');
+  const prompt=`You are a music industry analyst giving a personal roster update to a label employee who has hand-picked ${starredArtists.length} artists to watch closely.\n\nGrowth period: ${periodLabel}\nTotal followers: ${fmt(totalFollowers)}\nNet change: ${totalGrowth>=0?'+':''}${Number(totalGrowth).toLocaleString()}\nGainers: ${gainers.length} | Declining: ${losers.length} | No data: ${noData.length}\n${biggestGainer?'Top performer: @'+biggestGainer.handle+' (+'+Number(biggestGainer.diff).toLocaleString()+', +'+biggestGainer.pct.toFixed(2)+'%)':''}\n${biggestDrop?'Biggest concern: @'+biggestDrop.handle+' ('+Number(biggestDrop.diff).toLocaleString()+', '+biggestDrop.pct.toFixed(2)+'%)':''}\n${milestones.length>0?'Milestones: '+milestones.map(m=>'@'+m.handle).join(', '):'No milestones.'}\n\nArtist breakdown:\n${artistLines}\n\nWrite 3-5 bullet points. Be specific and direct. Start each bullet with a dash. No intro or conclusion.`;
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content:prompt}]})});
     const data=await res.json();const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
@@ -792,7 +787,6 @@ async function generateMyRosterAnalysis(){
   }
 }
 
-// ── REPORT ──
 async function generateHighlights(latest,prev){
   const box=document.getElementById('highlights-box'),content=document.getElementById('highlights-content');
   box.style.display='block';content.innerHTML='<span style="color:#888;font-size:13px;">Generating highlights...</span>';
@@ -844,7 +838,6 @@ function exportReport(){
   navigator.clipboard.writeText(txt).then(()=>alert('Copied!')).catch(()=>alert(txt));
 }
 
-// ── DOWNLOADS ──
 function getFileDateStr(){const d=new Date();return `${d.toLocaleString('en-US',{month:'short'})}-${d.getDate()}-${d.getFullYear()}`;}
 
 function downloadCSV(){
@@ -890,7 +883,6 @@ async function sendEmailNow(){
   btn.textContent='✉ Send email update';btn.disabled=false;
 }
 
-// ── TAB SWITCHING ──
 function switchTab(tab){
   document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',['live','report','anr'][i]===tab));
   document.getElementById('view-live').style.display=tab==='live'?'':'none';
