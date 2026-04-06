@@ -2,11 +2,18 @@
   "crons": [
     {
       "path": "/api/cron-snapshot-daily",
-      "schedule": "0 15 * * *"
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron-snapshot-anr",
+      "schedule": "30 14 * * *"
     }
   ],
   "functions": {
     "api/cron-snapshot-daily.js": {
+      "maxDuration": 300
+    },
+    "api/cron-snapshot-anr.js": {
       "maxDuration": 300
     },
     "api/followers.js": {
