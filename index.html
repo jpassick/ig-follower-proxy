@@ -602,14 +602,17 @@ function renderReport(){
 }
   dateEl.textContent=prev?`${prev.date} – ${latest.date}`:latest.date;
   generateHighlights(latest,prev);
-  const sorted=[...latest.data].sort((a,b)=>b.followers-a.followers);
-  tbody.innerHTML=sorted.map((d,idx)=>{
+  const sorted=[...latest.data].map(d=>{
     const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
-    const p=pe?pct(d.followers,pe.followers):null;const diff=pe?d.followers-pe.followers:null;
+    const diff=pe?d.followers-pe.followers:null;
+    const p=pe?pct(d.followers,pe.followers):null;
+    return{...d,_diff:diff,_pct:p};
+  }).sort((a,b)=>(b._diff??-Infinity)-(a._diff??-Infinity));
+  tbody.innerHTML=sorted.map((d,idx)=>{
     const rEntry=roster.find(r=>r.handle===d.handle);
     const picUrl=rEntry?.profilePic?proxyUrl(rEntry.profilePic):'';
     const avatarHtml=picUrl?`<img src="${picUrl}" class="avatar" alt="" style="width:24px;height:24px;" onerror="this.style.display='none'" />`:'';
-    return `<tr><td style="color:#bbb;font-size:12px;">${idx+1}</td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="https://www.instagram.com/${d.handle}/" target="_blank">@${d.handle}</a></div></td><td><strong>${fmt(d.followers)}</strong></td><td>${diff!==null?renderGrowth(diff):'<span class="muted">first entry</span>'}</td><td>${diff!==null?renderPct(p):'<span class="muted">—</span>'}</td></tr>`;
+    return `<tr><td style="color:#bbb;font-size:12px;">${idx+1}</td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="https://www.instagram.com/${d.handle}/" target="_blank">@${d.handle}</a></div></td><td><strong>${fmt(d.followers)}</strong></td><td>${d._diff!==null?renderGrowth(d._diff):'<span class="muted">first entry</span>'}</td><td>${d._diff!==null?renderPct(d._pct):'<span class="muted">—</span>'}</td></tr>`;
   }).join('');
 }
 
