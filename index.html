@@ -562,7 +562,7 @@ function renderRoster(){
     const picUrl=r.profilePic?proxyUrl(r.profilePic):'';
     const avatarHtml=picUrl?`<img src="${picUrl}" class="avatar" alt="" onerror="this.outerHTML='<span class=\\'avatar-placeholder\\'></span>'" />`:`<span class="avatar-placeholder"></span>`;
     const removeBtn=isAdmin?`<td style="text-align:right"><button class="danger" onclick="removeHandle(${i})">✕</button></td>`:'';
-    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></div></td><td>${fc}</td><td>${r.status==='ok'?renderGrowth(r._diff):'<span class="muted">—</span>'}</td><td>${r.status==='ok'?renderPct(r._pct):'<span class="muted">—</span>'}</td>${removeBtn}</tr>`;
+    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></div></td><td>${fc}</td><td>${r.status==='ok'?renderGrowth(r._diff):'<span class="muted">—</span>'}</td><td>${r.status==='ok'?renderPct(r._pct):'<span class="muted">—</span>'}</td><td>${genreHtml}</td><td>${noteHtml}</td><td style="text-align:right"><button class="danger" onclick="anrRemoveHandle('${r.handle}')">✕</button></td></tr>`;
   }).join('');
 }
 
@@ -697,7 +697,7 @@ async function anrImportCSV(event){
 }
 
 async function removeHandle(i){roster.splice(i,1);renderRoster();await persistRoster();}
-async function anrRemoveHandle(i){anrRoster.splice(i,1);renderAnrRoster();await persistAnrRoster();}
+async function anrRemoveHandle(handle){anrRoster=anrRoster.filter(r=>r.handle!==handle);renderAnrRoster();await persistAnrRoster();}
 async function retryHandle(i) {
   const r = roster[i];
   if (!r) return;
