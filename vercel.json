@@ -14,7 +14,7 @@
       "maxDuration": 300
     },
     "api/cron-snapshot-anr.js": {
-      "maxDuration": 300
+      "maxDuration": 600
     },
     "api/followers.js": {
       "maxDuration": 30
