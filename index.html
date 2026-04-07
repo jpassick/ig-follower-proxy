@@ -414,7 +414,17 @@ async function persistSnapshots() {
 
 async function persistAnrRoster() {
   const ind=document.getElementById('anr-saving-indicator'); ind.style.display='inline';
-  try { await fetch('/api/anr-roster',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({roster:anrRoster})}); } catch(e) {}
+  try {
+    const res = await fetch('/api/anr-roster',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({roster:anrRoster})});
+    if(!res.ok) {
+      const err = await res.json();
+      console.error('Save failed:', err);
+      document.getElementById('anr-csv-status').textContent = `⚠️ Save failed: ${err.error||res.status}`;
+    }
+  } catch(e) {
+    console.error('Save error:', e);
+    document.getElementById('anr-csv-status').textContent = `⚠️ Save error: ${e.message}`;
+  }
   ind.style.display='none';
 }
 
