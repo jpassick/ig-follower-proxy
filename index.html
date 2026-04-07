@@ -556,7 +556,7 @@ function renderRoster(){
   if(isMyRoster&&sorted.length===0){tbody.innerHTML=`<tr><td colspan="${cols}" style="padding:12px 0;font-size:13px;color:#aaa;">No starred artists yet — click ☆ next to any artist to add them here.</td></tr>`;return;}
   tbody.innerHTML=sorted.map((r,rankIdx)=>{
     const i=r._origIndex;
-    const fc=r.status==='loading'?'<span class="muted">fetching...</span>':r.status==='error'?'<span class="pill-err">error</span>':`<strong>${fmt(r.followers)}</strong>`;
+    const fc=r.status==='loading'?'<span class="muted">fetching...</span>':r.status==='error'?`<span class="pill-err">error</span> <button style="font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid #ddd;background:#fff;cursor:pointer;" onclick="anrRetryHandle(${i})">↻</button>`:`<strong>${fmt(r.followers)}</strong>`;
     const igUrl=`https://www.instagram.com/${r.handle}/`;
     const isStarred=starred.has(r.handle);
     const picUrl=r.profilePic?proxyUrl(r.profilePic):'';
