@@ -669,18 +669,20 @@ async function anrImportCSV(event){
     if(raw&&raw!=='handle'&&raw!=='username'&&raw!=='account') handles.push(raw);
   }
   const newHandles=handles.filter(h=>!anrRoster.find(r=>r.handle===h));
-  statusEl.textContent=`Importing ${newHandles.length} new handles...`;
+  const total=newHandles.length;
   let added=0;
   for(const handle of newHandles){
     const entry={handle,followers:null,status:'loading',profilePic:'',genre:'',note:''};
     anrRoster.push(entry); renderAnrRoster();
     try{const result=await fetchFollowers(handle);entry.followers=result.follower_count;entry.profilePic=result.profile_pic_url;entry.status='ok';entry.updatedAt=Date.now();}
     catch(e){entry.status='error';}
-    renderAnrRoster(); added++;
+    added++;
+    statusEl.textContent=`⏳ Importing ${added} of ${total} — do not close this tab...`;
+    renderAnrRoster();
+    await persistAnrRoster();
     await sleep(1100);
   }
-  await persistAnrRoster();
-  statusEl.textContent=`✓ ${added} imported`;
+  statusEl.textContent=`✅ Done! ${added} of ${total} imported and saved.`;
   event.target.value='';
 }
 
