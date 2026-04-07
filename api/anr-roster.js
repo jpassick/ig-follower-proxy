@@ -6,10 +6,20 @@ const redis = new Redis({
 });
 
 const ANR_KEY = 'anr-roster';
+const CHUNK_SIZE = 500;
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
+      const meta = await redis.get(`${ANR_KEY}:meta`);
+      if (meta && meta.chunks) {
+        const chunks = await Promise.all(
+          Array.from({length: meta.chunks}, (_, i) => redis.get(`${ANR_KEY}:chunk:${i}`))
+        );
+        const roster = chunks.flat().filter(Boolean);
+        return res.status(200).json({ roster });
+      }
+      // fallback to old single key
       const roster = await redis.get(ANR_KEY) || [];
       return res.status(200).json({ roster });
     } catch (e) {
@@ -20,7 +30,14 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     try {
       const { roster } = req.body;
-      await redis.set(ANR_KEY, roster);
+      const chunks = [];
+      for (let i = 0; i < roster.length; i += CHUNK_SIZE) {
+        chunks.push(roster.slice(i, i + CHUNK_SIZE));
+      }
+      await Promise.all(
+        chunks.map((chunk, i) => redis.set(`${ANR_KEY}:chunk:${i}`, chunk))
+      );
+      await redis.set(`${ANR_KEY}:meta`, { chunks: chunks.length, total: roster.length });
       return res.status(200).json({ ok: true });
     } catch (e) {
       return res.status(500).json({ error: e.message });
