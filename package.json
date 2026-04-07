@@ -1,5 +1,5 @@
 {
-  "name": "ig-follower-proxy",
+  "name": "ig-follower-proxy", 
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
