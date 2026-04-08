@@ -149,6 +149,13 @@
       <button class="primary" onclick="addHandle()">Add + fetch</button>
     </div>
     <div class="err-box" id="err-box"></div>
+
+<div id="my-roster-analysis-box" class="highlights-box" style="display:none; margin-top: 1rem;">
+  <div class="highlights-title">My Roster Insights</div>
+  <div class="highlights-content" id="my-roster-analysis-content">
+    Select stars to see personal roster analysis.
+  </div>
+</div>
     <table>
       <thead>
         <tr>
@@ -457,7 +464,10 @@ function getAnrSnapVal(handle){
 
 function switchRosterTab(tab){
   currentRosterTab=tab;
-  document.querySelectorAll('.roster-tab').forEach((el,i)=>el.classList.toggle('active',['all','my'][i]===tab));
+  document.querySelectorAll('.roster-tab').forEach(el=>{
+    const elTab=el.getAttribute('onclick').includes("'all'") ? 'all' : 'my';
+    el.classList.toggle('active', elTab===tab);
+  });
   const analysisBox=document.getElementById('my-roster-analysis-box');
   if(tab==='my'){ analysisBox.style.display='block'; }
   else { analysisBox.style.display='none'; }
