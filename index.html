@@ -757,21 +757,35 @@ async function generateAnrAnalysis(){
   if(!anrRoster.length) return;
   const box=document.getElementById('anr-analysis-box'),content=document.getElementById('anr-analysis-content');
   box.style.display='block';content.innerHTML='<span style="color:#888;font-size:13px;">Generating A&R analysis...</span>';
+  
   const enriched=anrRoster.filter(r=>r.status==='ok').map(r=>{
     const prev=getAnrSnapVal(r.handle);
     const diff=(r.followers!=null&&prev!=null)?r.followers-prev:null;
     const p=(r.followers!=null&&prev!=null)?pct(r.followers,prev):null;
     return{handle:r.handle,followers:r.followers,diff,pct:p,genre:r.genre||'',note:r.note||''};
   });
+  
   if(!enriched.length){content.innerHTML='<span style="color:#888;font-size:13px;">Add prospects and refresh to see analysis.</span>';return;}
   enriched.sort((a,b)=>(b.diff??-Infinity)-(a.diff??-Infinity));
+  
   const gainers=enriched.filter(e=>e.diff>0);
+  
+  // --- NEW LOGIC: Catch accounts with >= 4.5% growth ---
+  const highGrowth = enriched.filter(e => e.pct >= 4.5);
+  const highGrowthText = highGrowth.length > 0 
+    ? `\n🚨 HIGH GROWTH ALERTS (>= 4.5%): ` + highGrowth.map(e => `@${e.handle} (+${e.pct.toFixed(2)}%)`).join(', ') 
+    : '';
+
   const total=enriched.reduce((s,e)=>s+(e.followers||0),0);
   const totalGrowth=enriched.filter(e=>e.diff!==null).reduce((s,e)=>s+e.diff,0);
+  
   const artistLines=enriched.slice(0,20).map(e=>
-    `@${e.handle}${e.genre?' ('+e.genre+')':''}: ${fmt(e.followers)} followers${e.diff!==null?', '+(e.diff>=0?'+':'')+Number(e.diff).toLocaleString():', no comparison data'}`
+    `@${e.handle}${e.genre?' ('+e.genre+')':''}: ${fmt(e.followers)} followers${e.diff!==null?', '+(e.diff>=0?'+':'')+Number(e.diff).toLocaleString() + ' (' + (e.pct>=0?'+':'') + e.pct.toFixed(2) + '%)':', no comparison data'}`
   ).join('\n');
-  const prompt=`You are an A&R analyst at a major record label reviewing a list of unsigned Instagram prospects.\n\nTotal prospects tracked: ${enriched.length}\nCombined followers: ${fmt(total)}\nNet growth this period: ${totalGrowth>=0?'+':''}${Number(totalGrowth).toLocaleString()}\nGaining momentum: ${gainers.length} prospects\n\nTop prospects by follower growth:\n${artistLines}\n\nWrite 3-5 bullet points identifying the strongest prospects, fastest-growing accounts, and any patterns worth noting for signing consideration. Be direct and specific. Start each bullet with a dash. No intro or conclusion.`;
+  
+  // --- UPDATED PROMPT ---
+  const prompt=`You are an A&R analyst at a major record label reviewing a list of unsigned Instagram prospects.\n\nTotal prospects tracked: ${enriched.length}\nCombined followers: ${fmt(total)}\nNet growth this period: ${totalGrowth>=0?'+':''}${Number(totalGrowth).toLocaleString()}\nGaining momentum: ${gainers.length} prospects${highGrowthText}\n\nTop prospects by follower growth:\n${artistLines}\n\nWrite 3-5 bullet points identifying the strongest prospects, fastest-growing accounts, and any patterns worth noting for signing consideration. You MUST explicitly flag and call out any accounts in the 'HIGH GROWTH ALERTS' list as high-priority targets because they crossed the 4.5% threshold. Be direct and specific. Start each bullet with a dash. No intro or conclusion.`;
+  
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content:prompt}]})});
     const data=await res.json();
@@ -779,7 +793,10 @@ async function generateAnrAnalysis(){
     const lines=text.split('\n').filter(l=>l.trim());
     content.innerHTML='<ul>'+lines.map(l=>`<li>${l.replace(/^[-•]\s*/,'')}</li>`).join('')+'</ul>';
   }catch(e){
-    content.innerHTML=`<ul><li>${enriched.length} prospects tracked with ${fmt(total)} combined followers.</li>${gainers.length?`<li>Top prospect by growth: @${gainers[0].handle} (+${Number(gainers[0].diff).toLocaleString()})</li>`:''}</ul>`;
+    const fallbackBullets = [`${enriched.length} prospects tracked with ${fmt(total)} combined followers.`];
+    if(highGrowth.length > 0) fallbackBullets.push(`🚨 High Growth Alert: ${highGrowth.map(h => '@' + h.handle).join(', ')} exceeded 4.5% growth!`);
+    else if(gainers.length) fallbackBullets.push(`Top prospect by raw growth: @${gainers[0].handle} (+${Number(gainers[0].diff).toLocaleString()})`);
+    content.innerHTML='<ul>'+fallbackBullets.map(b=>`<li>${b}</li>`).join('')+'</ul>';
   }
 }
 
