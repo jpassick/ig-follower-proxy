@@ -448,13 +448,13 @@ function setAnrPeriod(days) {
   const el=document.getElementById(map[days]); if(el) el.classList.add('active');
   renderAnrRoster();
 }
-
 function getSnapshotPair() {
   if(!snapshots.length) return null;
   const latest=snapshots[snapshots.length-1];
   const cutoff=latest.ts-(currentPeriod*24*60*60*1000);
   let best=null;
-  for(let i=snapshots.length-2;i>=0;i--){ if(snapshots[i].ts<=cutoff){best=snapshots[i];break;} best=snapshots[i]; }
+  for(let i=snapshots.length-2;i>=0;i--){if(snapshots[i].ts<=cutoff){best=snapshots[i];break;}}
+  if(!best&&snapshots.length>1)best=snapshots[0];
   return{latest,prev:best};
 }
 
@@ -476,8 +476,19 @@ function renderPct(p){if(p===null)return '<span class="muted">—</span>';const 
 function renderGrowth(diff){if(diff===null)return '<span class="muted">—</span>';const cls=diff>0?'up':diff<0?'down':'muted',sign=diff>0?'+':'';return `<span class="${cls}">${sign}${Number(diff).toLocaleString()}</span>`;}
 
 function getSnapVal(handle){
-  const pair=getSnapshotPair(); if(!pair) return null;
-  const e=pair.prev?pair.prev.data.find(d=>d.handle===handle):null;
+  if(!snapshots.length) return null;
+  const latest=snapshots[snapshots.length-1];
+  const cutoff=latest.ts-(currentPeriod*24*60*60*1000);
+  let prev=null;
+  for(let i=snapshots.length-2;i>=0;i--){
+    const snap=snapshots[i];
+    const entry=snap.data.find(d=>d.handle===handle);
+    if(!entry) continue;
+    if(snap.ts<=cutoff){prev=snap;break;}
+    prev=snap;
+  }
+  if(!prev) return null;
+  const e=prev.data.find(d=>d.handle===handle);
   return e?e.followers:null;
 }
 
