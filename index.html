@@ -74,20 +74,6 @@
   .highlights-content { font-size: 13px; color: #1a1a1a; line-height: 1.7; }
   .highlights-content ul { padding-left: 1.25rem; }
   .highlights-content li { margin-bottom: 4px; }
-  .my-roster-analysis-box { background: #f5f0ff; border: 1px solid #d4bff8; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
-  .my-roster-analysis-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; }
-  .my-roster-analysis-title { font-size: 13px; font-weight: 600; color: #6b2fa0; }
-  .my-roster-analysis-subtitle { font-size: 11px; color: #9b6fd4; margin-bottom: 10px; }
-  .my-roster-analysis-content { font-size: 13px; color: #1a1a1a; line-height: 1.7; }
-  .my-roster-analysis-content ul { padding-left: 1.25rem; }
-  .my-roster-analysis-content li { margin-bottom: 4px; }
-  .analysis-regen-btn { font-size: 11px; padding: 3px 10px; border-radius: 20px; border: 1px solid #d4bff8; background: transparent; color: #6b2fa0; cursor: pointer; }
-  .analysis-regen-btn:hover { background: #ede5ff; }
-  .anr-analysis-box { background: #f0fff4; border: 1px solid #b7ebc8; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
-  .anr-analysis-title { font-size: 13px; font-weight: 600; color: #1a7a3c; margin-bottom: 6px; }
-  .anr-analysis-content { font-size: 13px; color: #1a1a1a; line-height: 1.7; }
-  .anr-analysis-content ul { padding-left: 1.25rem; }
-  .anr-analysis-content li { margin-bottom: 4px; }
   .actions { display: flex; gap: 8px; margin-bottom: 1rem; }
   .rank { font-size: 12px; color: #bbb; font-weight: 500; min-width: 20px; }
   .star-btn { background: none; border: none; cursor: pointer; padding: 0 4px 0 0; font-size: 15px; color: #ddd; line-height: 1; }
@@ -158,13 +144,6 @@
         <button class="period-tab" onclick="setPeriod(30)" id="period-30">30 days</button>
       </div>
     </div>
-    <div class="my-roster-analysis-box" id="my-roster-analysis-box" style="display:none;">
-      <div class="my-roster-analysis-header">
-        <div class="my-roster-analysis-title">★ My Roster Analysis</div>
-      </div>
-      <div class="my-roster-analysis-subtitle" id="my-roster-analysis-subtitle"></div>
-      <div class="my-roster-analysis-content" id="my-roster-analysis-content"></div>
-    </div>
     <div class="add-row" id="add-row-el">
       <input type="text" id="add-input" placeholder="Instagram handle, e.g. rodwave" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
       <button class="primary" onclick="addHandle()">Add + fetch</button>
@@ -216,12 +195,6 @@
   </div>
 
   <div id="view-anr" style="display:none;">
-    
-    <div class="anr-analysis-box" id="anr-analysis-box" style="display:none;">
-      <div class="anr-analysis-title">🔍 A&amp;R Prospects Analysis</div>
-      <div class="anr-analysis-content" id="anr-analysis-content"></div>
-    </div>
-
     <div class="top-actions">
       <button class="secondary" onclick="anrDownloadCSV()">↓ Download CSV</button>
       <span class="saving" id="anr-saving-indicator">Saving...</span>
@@ -348,7 +321,7 @@ async function loadSnapshots() {
 
 async function loadAnrAll() {
   await Promise.all([loadAnrRoster(), loadAnrSnapshots()]);
-  generateAnrAnalysis();
+  // Skipping analysis for now to focus on emoji alerts
 }
 
 async function loadAnrRoster() {
@@ -413,7 +386,6 @@ function setPeriod(days) {
   const map={1:'period-1',7:'period-7',14:'period-14',30:'period-30'};
   const el=document.getElementById(map[days]); if(el) el.classList.add('active');
   myRosterAnalysisGenerated=false; renderRoster();
-  if(currentRosterTab==='my') generateMyRosterAnalysis();
 }
 
 function setAnrPeriod(days) {
@@ -477,7 +449,7 @@ function switchRosterTab(tab){
   currentRosterTab=tab;
   document.querySelectorAll('.roster-tab').forEach((el,i)=>el.classList.toggle('active',['all','my'][i]===tab));
   const analysisBox=document.getElementById('my-roster-analysis-box');
-  if(tab==='my'){ analysisBox.style.display='block'; if(!myRosterAnalysisGenerated) generateMyRosterAnalysis(); }
+  if(tab==='my'){ analysisBox.style.display='block'; }
   else { analysisBox.style.display='none'; }
   renderRoster();
 }
@@ -562,11 +534,15 @@ function renderAnrRoster(){
     const igUrl=`https://www.instagram.com/${r.handle}/`;
     const picUrl=r.profilePic?proxyUrl(r.profilePic):'';
     const avatarHtml=picUrl?`<img src="${picUrl}" class="avatar" alt="" onerror="this.outerHTML='<span class=\\'avatar-placeholder\\'></span>'" />`:`<span class="avatar-placeholder"></span>`;
+    
+    // Add 🚨 alert emoji if growth is 4.5% or higher
+    const alertEmoji = r._pct >= 4.5 ? '🚨 ' : '';
+    
     const genre=r.genre||'';
     const note=r.note||'';
     const genreHtml=`<span class="genre-pill" onclick="editAnrGenre(${i})" title="Click to edit">${genre||'+ genre'}</span>`;
     const noteHtml=`<span class="note-pill" onclick="editAnrNote(${i})" title="${note||'Click to add note'}">${note||'+ note'}</span>`;
-    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></div></td><td>${fc}</td><td>${r.status==='ok'?renderGrowth(r._diff):'<span class="muted">—</span>'}</td><td>${r.status==='ok'?renderPct(r._pct):'<span class="muted">—</span>'}</td><td>${genreHtml}</td><td>${noteHtml}</td><td style="text-align:right"><button class="danger" onclick="anrRemoveHandle(${i})">✕</button></td></tr>`;
+    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${alertEmoji}${r.handle}</a></div></td><td>${fc}</td><td>${r.status==='ok'?renderGrowth(r._diff):'<span class="muted">—</span>'}</td><td>${r.status==='ok'?renderPct(r._pct):'<span class="muted">—</span>'}</td><td>${genreHtml}</td><td>${noteHtml}</td><td style="text-align:right"><button class="danger" onclick="anrRemoveHandle(${i})">✕</button></td></tr>`;
   }).join('');
 }
 
@@ -716,7 +692,6 @@ async function refreshAll(){
   pb.style.display='none';btn.disabled=false;btn.textContent='↻ Refresh all';
   updateLastUpdated();await persistRoster();
   await saveSnapshot(true);
-  if(currentRosterTab==='my'){myRosterAnalysisGenerated=false;generateMyRosterAnalysis();}
 }
 
 async function anrRefreshAll(){
@@ -733,7 +708,6 @@ async function anrRefreshAll(){
   pb.style.display='none';btn.disabled=false;btn.textContent='↻ Refresh all';
   await persistAnrRoster();
   await saveAnrSnapshot(true);
-  generateAnrAnalysis();
 }
 
 async function saveSnapshot(silent=false){
@@ -753,125 +727,10 @@ async function saveAnrSnapshot(silent=false){
   await persistAnrSnapshots();
 }
 
-async function generateAnrAnalysis(){
-  if(!anrRoster.length) return;
-  const box=document.getElementById('anr-analysis-box'),content=document.getElementById('anr-analysis-content');
-  box.style.display='block';content.innerHTML='<span style="color:#888;font-size:13px;">Generating A&R analysis...</span>';
-  
-  const enriched=anrRoster.filter(r=>r.status==='ok').map(r=>{
-    const prev=getAnrSnapVal(r.handle);
-    const diff=(r.followers!=null&&prev!=null)?r.followers-prev:null;
-    const p=(r.followers!=null&&prev!=null)?pct(r.followers,prev):null;
-    return{handle:r.handle,followers:r.followers,diff,pct:p,genre:r.genre||'',note:r.note||''};
-  });
-  
-  if(!enriched.length){content.innerHTML='<span style="color:#888;font-size:13px;">Add prospects and refresh to see analysis.</span>';return;}
-  enriched.sort((a,b)=>(b.diff??-Infinity)-(a.diff??-Infinity));
-  
-  const gainers=enriched.filter(e=>e.diff>0);
-  
-  const highGrowth = enriched.filter(e => e.pct >= 4.5);
-  const highGrowthText = highGrowth.length > 0 
-    ? `\n🚨 HIGH GROWTH ALERTS (>= 4.5%): ` + highGrowth.map(e => `@${e.handle} (+${e.pct.toFixed(2)}%)`).join(', ') 
-    : '';
-
-  const total=enriched.reduce((s,e)=>s+(e.followers||0),0);
-  const totalGrowth=enriched.filter(e=>e.diff!==null).reduce((s,e)=>s+e.diff,0);
-  
-  const artistLines=enriched.slice(0,20).map(e=>
-    `@${e.handle}${e.genre?' ('+e.genre+')':''}: ${fmt(e.followers)} followers${e.diff!==null?', '+(e.diff>=0?'+':'')+Number(e.diff).toLocaleString() + ' (' + (e.pct>=0?'+':'') + e.pct.toFixed(2) + '%)':', no comparison data'}`
-  ).join('\n');
-  
-  // --- ADDED THE EMOJI INSTRUCTION HERE ---
-  const prompt=`You are an A&R analyst at a major record label reviewing a list of unsigned Instagram prospects.\n\nTotal prospects tracked: ${enriched.length}\nCombined followers: ${fmt(total)}\nNet growth this period: ${totalGrowth>=0?'+':''}${Number(totalGrowth).toLocaleString()}\nGaining momentum: ${gainers.length} prospects${highGrowthText}\n\nTop prospects by follower growth:\n${artistLines}\n\nWrite 3-5 bullet points identifying the strongest prospects, fastest-growing accounts, and any patterns worth noting for signing consideration. You MUST explicitly flag and call out any accounts in the 'HIGH GROWTH ALERTS' list as high-priority targets because they crossed the 4.5% threshold, and place a 🚨 emoji directly next to their handle. Be direct and specific. Start each bullet with a dash. No intro or conclusion.`;
-  
-  try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content:prompt}]})});
-    const data=await res.json();
-    const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
-    const lines=text.split('\n').filter(l=>l.trim());
-    content.innerHTML='<ul>'+lines.map(l=>`<li>${l.replace(/^[-•]\s*/,'')}</li>`).join('')+'</ul>';
-  }catch(e){
-    // --- UPDATED FALLBACK TO ALSO USE THE EMOJI ---
-    const fallbackBullets = [`${enriched.length} prospects tracked with ${fmt(total)} combined followers.`];
-    if(highGrowth.length > 0) fallbackBullets.push(`🚨 High Growth Alert: ${highGrowth.map(h => '🚨 @' + h.handle).join(', ')} exceeded 4.5% growth!`);
-    else if(gainers.length) fallbackBullets.push(`Top prospect by raw growth: @${gainers[0].handle} (+${Number(gainers[0].diff).toLocaleString()})`);
-    content.innerHTML='<ul>'+fallbackBullets.map(b=>`<li>${b}</li>`).join('')+'</ul>';
-  }
-}
-
-function anrDownloadCSV(){
-  const sorted=getSortedAnrRoster();
-  let csv='Rank,Handle,Followers,Growth,Growth %,Genre,Notes\n';
-  sorted.forEach((r,idx)=>{
-    const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';
-    const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';
-    csv+=`${idx+1},@${r.handle},${r.followers!=null?r.followers:''},${growth},${growthPct},"${r.genre||''}","${r.note||''}"\n`;
-  });
-  const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');
-  a.href=url;a.download=`ANR-Prospects-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
-}
-
-function regenerateMyRosterAnalysis(){myRosterAnalysisGenerated=false;generateMyRosterAnalysis();}
-
-async function generateMyRosterAnalysis(){
-  myRosterAnalysisGenerated=true;
-  const content=document.getElementById('my-roster-analysis-content');
-  const subtitle=document.getElementById('my-roster-analysis-subtitle');
-  const starredList=[...starred];
-  if(!starredList.length){subtitle.textContent='';content.innerHTML='<span style="color:#9b6fd4;font-size:13px;">Star artists using ☆ to build your roster, then come back here for a personalized analysis.</span>';return;}
-  const starredArtists=roster.filter(r=>starred.has(r.handle)&&r.status==='ok');
-  if(!starredArtists.length){subtitle.textContent=`${starredList.length} starred`;content.innerHTML='<span style="color:#9b6fd4;font-size:13px;">No follower data available yet for your starred artists — try refreshing.</span>';return;}
-  const periodLabel=currentPeriod===1?'24 hours':`${currentPeriod} days`;
-  subtitle.textContent=`${starredList.length} artist${starredList.length!==1?'s':''} · ${periodLabel}`;
-  content.innerHTML='<span style="color:#9b6fd4;font-size:13px;">Generating analysis...</span>';
-  const enriched=starredArtists.map(r=>{const prev=getSnapVal(r.handle);const diff=(r.followers!=null&&prev!=null)?r.followers-prev:null;const p=(r.followers!=null&&prev!=null)?pct(r.followers,prev):null;return{handle:r.handle,followers:r.followers,diff,pct:p};});
-  enriched.sort((a,b)=>(b.diff??-Infinity)-(a.diff??-Infinity));
-  const gainers=enriched.filter(e=>e.diff>0),losers=enriched.filter(e=>e.diff<0),noData=enriched.filter(e=>e.diff===null);
-  const biggestGainer=gainers[0]||null,biggestDrop=losers.length?losers[losers.length-1]:null;
-  const totalFollowers=enriched.reduce((s,e)=>s+(e.followers||0),0),totalGrowth=enriched.filter(e=>e.diff!==null).reduce((s,e)=>s+e.diff,0);
-  const milestones=enriched.filter(e=>{if(e.diff===null)return false;const prevF=e.followers-e.diff;return[100000,250000,500000,1000000,2000000,5000000,10000000].some(t=>prevF<t&&e.followers>=t);});
-  const artistLines=enriched.map(e=>`@${e.handle}: ${fmt(e.followers)} followers${e.diff!==null?', '+(e.diff>=0?'+':'')+Number(e.diff).toLocaleString()+' ('+(e.pct!==null?(e.pct>=0?'+':'')+e.pct.toFixed(2)+'%':'—')+')':', no comparison data yet'}`).join('\n');
-  const prompt=`You are a music industry analyst giving a personal roster update to a label employee who has hand-picked ${starredArtists.length} artists to watch closely.\n\nGrowth period: ${periodLabel}\nTotal followers: ${fmt(totalFollowers)}\nNet change: ${totalGrowth>=0?'+':''}${Number(totalGrowth).toLocaleString()}\nGainers: ${gainers.length} | Declining: ${losers.length} | No data: ${noData.length}\n${biggestGainer?'Top performer: @'+biggestGainer.handle+' (+'+Number(biggestGainer.diff).toLocaleString()+', +'+biggestGainer.pct.toFixed(2)+'%)':''}\n${biggestDrop?'Biggest concern: @'+biggestDrop.handle+' ('+Number(biggestDrop.diff).toLocaleString()+', '+biggestDrop.pct.toFixed(2)+'%)':''}\n${milestones.length>0?'Milestones: '+milestones.map(m=>'@'+m.handle).join(', '):'No milestones.'}\n\nArtist breakdown:\n${artistLines}\n\nWrite 3-5 bullet points. Be specific and direct. Start each bullet with a dash. No intro or conclusion.`;
-  try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content:prompt}]})});
-    const data=await res.json();const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
-    const lines=text.split('\n').filter(l=>l.trim());
-    content.innerHTML='<ul>'+lines.map(l=>`<li>${l.replace(/^[-•]\s*/,'')}</li>`).join('')+'</ul>';
-  }catch(e){
-    const bullets=[];
-    bullets.push(`Your ${starredArtists.length} tracked artists have ${fmt(totalFollowers)} total followers, with a net change of ${totalGrowth>=0?'+':''}${Number(totalGrowth).toLocaleString()} over the ${periodLabel}.`);
-    if(biggestGainer?.diff>0)bullets.push(`Top performer: @${biggestGainer.handle} added ${Number(biggestGainer.diff).toLocaleString()} followers (+${biggestGainer.pct.toFixed(2)}%).`);
-    if(biggestDrop?.diff<0)bullets.push(`Needs attention: @${biggestDrop.handle} lost ${Math.abs(biggestDrop.diff).toLocaleString()} followers (${biggestDrop.pct.toFixed(2)}%).`);
-    if(gainers.length>0)bullets.push(`${gainers.length} of ${starredArtists.length} artists gained followers this period.`);
-    if(milestones.length>0)bullets.push(`Milestone: ${milestones.map(m=>'@'+m.handle).join(', ')} crossed a major follower threshold.`);
-    content.innerHTML='<ul>'+bullets.map(b=>`<li>${b}</li>`).join('')+'</ul>';
-  }
-}
-
-async function generateHighlights(latest,prev){
-  const box=document.getElementById('highlights-box'),content=document.getElementById('highlights-content');
-  box.style.display='block';content.innerHTML='<span style="color:#888;font-size:13px;">Generating highlights...</span>';
-  if(!prev){content.innerHTML='<ul><li>This is the first snapshot — growth data will appear after the next refresh.</li></ul>';return;}
-  const changes=latest.data.map(d=>{const pe=prev.data.find(p=>p.handle===d.handle);const diff=pe?d.followers-pe.followers:null;const p=pe?((d.followers-pe.followers)/pe.followers*100):null;return{handle:d.handle,followers:d.followers,diff,pct:p};}).filter(d=>d.diff!==null);
-  const sorted=[...changes].sort((a,b)=>b.diff-a.diff);
-  const biggestGainer=sorted[0],biggestDrop=sorted[sorted.length-1],gainers=changes.filter(c=>c.diff>0).length,losers=changes.filter(c=>c.diff<0).length;
-  const milestones=changes.filter(c=>{const pf=c.followers-c.diff;return[100000,250000,500000,1000000,2000000,5000000,10000000].some(t=>pf<t&&c.followers>=t);});
-  const prompt=`You are a music industry analyst writing a brief weekly highlights summary for a record label's Instagram follower report. Write 3-5 bullet points in full sentences. Be concise.\n\nDate: ${latest.date}\nArtists: ${latest.data.length}\nGained: ${gainers}, Lost: ${losers}\nBiggest gainer: @${biggestGainer.handle} (+${biggestGainer.diff.toLocaleString()}, +${biggestGainer.pct.toFixed(2)}%)\nBiggest drop: @${biggestDrop.handle} (${biggestDrop.diff.toLocaleString()}, ${biggestDrop.pct.toFixed(2)}%)\n${milestones.length>0?'Milestones: '+milestones.map(m=>'@'+m.handle).join(', '):'No milestones.'}\n\nStart each bullet with a dash. No intro or conclusion.`;
-  try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content:prompt}]})});
-    const data=await res.json();const text=data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
-    const lines=text.split('\n').filter(l=>l.trim());
-    content.innerHTML='<ul>'+lines.map(l=>`<li>${l.replace(/^[-•]\s*/,'')}</li>`).join('')+'</ul>';
-  }catch(e){
-    const bullets=[];
-    bullets.push(`${gainers} out of ${latest.data.length} artists gained followers this week, while ${losers} saw a decline.`);
-    if(biggestGainer?.diff>0)bullets.push(`Biggest gainer: @${biggestGainer.handle} added ${biggestGainer.diff.toLocaleString()} followers (+${biggestGainer.pct.toFixed(2)}%).`);
-    if(biggestDrop?.diff<0)bullets.push(`Biggest drop: @${biggestDrop.handle} lost ${Math.abs(biggestDrop.diff).toLocaleString()} followers (${biggestDrop.pct.toFixed(2)}%).`);
-    if(milestones.length>0)bullets.push(`Milestone: ${milestones.map(m=>'@'+m.handle).join(', ')} crossed a major follower threshold.`);
-    content.innerHTML='<ul>'+bullets.map(b=>`<li>${b}</li>`).join('')+'</ul>';
-  }
-}
+// AI Analysis functions kept as stubs if needed later
+async function generateAnrAnalysis() {}
+async function generateMyRosterAnalysis() {}
+async function generateHighlights(latest,prev) {}
 
 function renderReport(){
   const tbody=document.getElementById('report-rows'),dateEl=document.getElementById('report-date');
@@ -882,7 +741,6 @@ function renderReport(){
   if(weekly.length>1){prev=weekly[weekly.length-2];}
   else{const cutoff=latest.ts-(7*24*60*60*1000);const aged=snapshots.slice(0,-1).filter(s=>s.ts<=cutoff);prev=aged.length?aged[aged.length-1]:snapshots[0];}
   dateEl.textContent=prev?`${prev.date} – ${latest.date}`:latest.date;
-  generateHighlights(latest,prev);
   const sorted=[...latest.data].map(d=>{const pe=prev?prev.data.find(p=>p.handle===d.handle):null;const diff=pe?d.followers-pe.followers:null;const p=pe?pct(d.followers,pe.followers):null;return{...d,_diff:diff,_pct:p};}).sort((a,b)=>(b._diff??-Infinity)-(a._diff??-Infinity));
   tbody.innerHTML=sorted.map((d,idx)=>{
     const rEntry=roster.find(r=>r.handle===d.handle);
@@ -930,11 +788,8 @@ function downloadReportPDF(){
   doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('Weekly Follower Report',14,20);
   doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(120);
   doc.text(`Alamo Records / Santa Anna Roster — ${today}`,14,28);doc.setTextColor(0);
-  const highlightsEl=document.getElementById('highlights-content');const highlightsText=highlightsEl?highlightsEl.innerText:'';
-  let startY=36;
-  if(highlightsText&&highlightsText.trim()&&!highlightsText.includes('Generating')){doc.setFontSize(11);doc.setFont('helvetica','bold');doc.text('Weekly Highlights',14,38);doc.setFont('helvetica','normal');doc.setFontSize(9);const lines=doc.splitTextToSize(highlightsText,180);doc.text(lines,14,46);startY=46+(lines.length*5)+4;}
   const tableData=sorted.map((r,idx)=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+Number(r._diff).toLocaleString():'—';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'first entry';return[idx+1,`@${r.handle}`,fmt(r.followers),growth,growthPct];});
-  doc.autoTable({startY,head:[['#','Handle','Followers','Follower Growth','Follower Growth %']],body:tableData,styles:{fontSize:10,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:12},1:{cellWidth:60},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:40}}});
+  doc.autoTable({startY:36,head:[['#','Handle','Followers','Follower Growth','Follower Growth %']],body:tableData,styles:{fontSize:10,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:12},1:{cellWidth:60},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:40}}});
   doc.save(`Alamo-Weekly-Report-${getFileDateStr()}.pdf`);
 }
 
