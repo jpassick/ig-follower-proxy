@@ -58,7 +58,7 @@ export default async function handler(req, res) {
         artist.lastUpdated = now;
         results.push({ handle: artist.handle, followers });
         // Small delay to avoid rate limiting
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 250));
       } catch (err) {
         errors.push({ handle: artist.handle, error: err.message });
         console.error(`Error refreshing ${artist.handle}:`, err.message);
