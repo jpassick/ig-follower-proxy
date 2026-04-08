@@ -98,12 +98,6 @@
   .avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #eee; flex-shrink: 0; }
   .avatar-placeholder { width: 32px; height: 32px; border-radius: 50%; background: #e8e8e8; flex-shrink: 0; display: inline-block; }
   .handle-cell { display: flex; align-items: center; gap: 10px; }
-  .anr-gate { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 2rem; text-align: center; margin-top: 1rem; }
-  .anr-gate-title { font-size: 14px; font-weight: 600; margin-bottom: 0.5rem; }
-  .anr-gate-subtitle { font-size: 12px; color: #888; margin-bottom: 1rem; }
-  .anr-gate-input { font-size: 14px; padding: 10px 14px; border: 1px solid #e0e0e0; border-radius: 8px; background: #fafafa; width: 240px; outline: none; margin-bottom: 10px; display: block; margin-left: auto; margin-right: auto; }
-  .anr-gate-input:focus { border-color: #1a1a1a; }
-  .anr-gate-err { font-size: 12px; color: #c0392b; margin-top: 6px; display: none; }
   .note-pill { font-size: 11px; background: #f5f5f5; color: #888; border-radius: 20px; padding: 2px 8px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
   .note-pill:hover { background: #eee; }
   .genre-pill { font-size: 11px; background: #eef4ff; color: #3b6fd4; border-radius: 20px; padding: 2px 8px; cursor: pointer; }
@@ -138,7 +132,6 @@
     <button class="tab" onclick="switchTab('anr')">A&amp;R</button>
   </div>
 
-  <!-- LIVE TAB -->
   <div id="view-live">
     <div class="top-actions" id="admin-actions">
       <button class="secondary" id="refresh-btn" onclick="refreshAll()">↻ Refresh all</button>
@@ -193,7 +186,6 @@
     </table>
   </div>
 
-  <!-- WEEKLY REPORT TAB -->
   <div id="view-report" style="display:none;">
     <div class="actions">
       <button onclick="exportReport()">Copy report text</button>
@@ -223,70 +215,58 @@
     </div>
   </div>
 
-  <!-- A&R TAB -->
   <div id="view-anr" style="display:none;">
-    <!-- A&R Password Gate -->
-    <div id="anr-gate" class="anr-gate">
-      <div class="anr-gate-title">🔒 A&amp;R Prospects</div>
-      <div class="anr-gate-subtitle">This section is restricted. Enter the A&amp;R password to continue.</div>
-      <input type="password" class="anr-gate-input" id="anr-pw-input" placeholder="Enter A&R password" autocomplete="off" />
-      <button class="gate-btn" style="width:240px;margin:0 auto;" onclick="checkAnrPassword()">Unlock</button>
-      <div class="anr-gate-err" id="anr-pw-err">Incorrect password — try again</div>
+    
+    <div class="anr-analysis-box" id="anr-analysis-box" style="display:none;">
+      <div class="anr-analysis-title">🔍 A&amp;R Prospects Analysis</div>
+      <div class="anr-analysis-content" id="anr-analysis-content"></div>
     </div>
 
-    <!-- A&R Main Content (hidden until unlocked) -->
-    <div id="anr-content" style="display:none;">
-      <div class="anr-analysis-box" id="anr-analysis-box" style="display:none;">
-        <div class="anr-analysis-title">🔍 A&amp;R Prospects Analysis</div>
-        <div class="anr-analysis-content" id="anr-analysis-content"></div>
-      </div>
-
-      <div class="top-actions">
-        <button class="secondary" onclick="anrDownloadCSV()">↓ Download CSV</button>
-        <span class="saving" id="anr-saving-indicator">Saving...</span>
-      </div>
-
-      <div class="progress-bar" id="anr-progress-bar"><div class="progress-bar-fill" id="anr-progress-fill"></div></div>
-
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
-        <div class="period-tabs">
-          <span class="period-label">Growth period:</span>
-          <button class="period-tab" onclick="setAnrPeriod(1)" id="anr-period-1">24 hours</button>
-          <button class="period-tab active" onclick="setAnrPeriod(7)" id="anr-period-7">7 days</button>
-          <button class="period-tab" onclick="setAnrPeriod(14)" id="anr-period-14">14 days</button>
-          <button class="period-tab" onclick="setAnrPeriod(30)" id="anr-period-30">30 days</button>
-        </div>
-      </div>
-
-      <div class="add-row">
-        <input type="text" id="anr-add-input" placeholder="Instagram handle, e.g. unsignedartist" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-        <button class="primary" onclick="anrAddHandle()">Add + fetch</button>
-      </div>
-
-      <div class="csv-import-row">
-        <span class="csv-label">Bulk import:</span>
-        <input type="file" id="anr-csv-input" accept=".csv" style="font-size:12px;" onchange="anrImportCSV(event)" />
-        <span class="csv-label" id="anr-csv-status"></span>
-      </div>
-
-      <div class="err-box" id="anr-err-box"></div>
-
-      <table>
-        <thead>
-          <tr>
-            <th style="width:4%">#</th>
-            <th style="width:26%" onclick="sortAnrBy('handle')">Handle <span class="sort-arrow" id="anr-sort-handle">↕</span></th>
-            <th style="width:14%" onclick="sortAnrBy('followers')">Followers <span class="sort-arrow" id="anr-sort-followers">↕</span></th>
-            <th style="width:18%" onclick="sortAnrBy('growth')">Growth <span class="sort-arrow active" id="anr-sort-growth">▼</span></th>
-            <th style="width:18%" onclick="sortAnrBy('pct')">Growth % <span class="sort-arrow" id="anr-sort-pct">↕</span></th>
-            <th style="width:14%">Genre</th>
-            <th style="width:12%">Notes</th>
-            <th style="width:6%"></th>
-          </tr>
-        </thead>
-        <tbody id="anr-roster-body"></tbody>
-      </table>
+    <div class="top-actions">
+      <button class="secondary" onclick="anrDownloadCSV()">↓ Download CSV</button>
+      <span class="saving" id="anr-saving-indicator">Saving...</span>
     </div>
+
+    <div class="progress-bar" id="anr-progress-bar"><div class="progress-bar-fill" id="anr-progress-fill"></div></div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
+      <div class="period-tabs">
+        <span class="period-label">Growth period:</span>
+        <button class="period-tab" onclick="setAnrPeriod(1)" id="anr-period-1">24 hours</button>
+        <button class="period-tab active" onclick="setAnrPeriod(7)" id="anr-period-7">7 days</button>
+        <button class="period-tab" onclick="setAnrPeriod(14)" id="anr-period-14">14 days</button>
+        <button class="period-tab" onclick="setAnrPeriod(30)" id="anr-period-30">30 days</button>
+      </div>
+    </div>
+
+    <div class="add-row">
+      <input type="text" id="anr-add-input" placeholder="Instagram handle, e.g. unsignedartist" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+      <button class="primary" onclick="anrAddHandle()">Add + fetch</button>
+    </div>
+
+    <div class="csv-import-row">
+      <span class="csv-label">Bulk import:</span>
+      <input type="file" id="anr-csv-input" accept=".csv" style="font-size:12px;" onchange="anrImportCSV(event)" />
+      <span class="csv-label" id="anr-csv-status"></span>
+    </div>
+
+    <div class="err-box" id="anr-err-box"></div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:4%">#</th>
+          <th style="width:26%" onclick="sortAnrBy('handle')">Handle <span class="sort-arrow" id="anr-sort-handle">↕</span></th>
+          <th style="width:14%" onclick="sortAnrBy('followers')">Followers <span class="sort-arrow" id="anr-sort-followers">↕</span></th>
+          <th style="width:18%" onclick="sortAnrBy('growth')">Growth <span class="sort-arrow active" id="anr-sort-growth">▼</span></th>
+          <th style="width:18%" onclick="sortAnrBy('pct')">Growth % <span class="sort-arrow" id="anr-sort-pct">↕</span></th>
+          <th style="width:14%">Genre</th>
+          <th style="width:12%">Notes</th>
+          <th style="width:6%"></th>
+        </tr>
+      </thead>
+      <tbody id="anr-roster-body"></tbody>
+    </table>
   </div>
 </div>
 
@@ -295,15 +275,13 @@ const ADMIN_PASSWORD = 'AlamoRec0rds$';
 const VIEW_PASSWORD = '25Madison';
 const ANR_PASSWORD = 'LouTheDog';
 const STARRED_KEY = 'ig_starred_v1';
-const ANR_UNLOCKED_KEY = 'ig_anr_unlocked';
 
-let roster = [], snapshots = [], currentSort = { field: 'growth', dir: 'desc' }, isAdmin = false;
+let roster = [], snapshots = [], currentSort = { field: 'growth', dir: 'desc' }, isAdmin = false, isAnr = false;
 let currentRosterTab = 'all', currentPeriod = 7;
 let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
 let myRosterAnalysisGenerated = false;
 
 let anrRoster = [], anrSnapshots = [], anrCurrentSort = { field: 'growth', dir: 'desc' }, anrCurrentPeriod = 7;
-let anrUnlocked = sessionStorage.getItem(ANR_UNLOCKED_KEY) === 'true';
 
 function saveStarred() { localStorage.setItem(STARRED_KEY, JSON.stringify([...starred])); }
 function toggleStar(handle) {
@@ -316,48 +294,45 @@ function proxyUrl(url) { if(!url) return ''; return `/api/proxy-image?url=${enco
 
 function checkPassword() {
   const val = document.getElementById('pw-input').value;
-  if (val === ADMIN_PASSWORD) { sessionStorage.setItem('ig_auth','admin'); isAdmin=true; showApp(); }
-  else if (val === VIEW_PASSWORD) { sessionStorage.setItem('ig_auth','viewer'); isAdmin=false; showApp(); }
-  else { document.getElementById('pw-err').style.display='block'; }
+  if (val === ADMIN_PASSWORD) { 
+    sessionStorage.setItem('ig_auth','admin'); isAdmin = true; isAnr = false; showApp(); 
+  } else if (val === VIEW_PASSWORD) { 
+    sessionStorage.setItem('ig_auth','viewer'); isAdmin = false; isAnr = false; showApp(); 
+  } else if (val === ANR_PASSWORD) { 
+    sessionStorage.setItem('ig_auth','anr'); isAdmin = false; isAnr = true; showApp(); 
+  } else { 
+    document.getElementById('pw-err').style.display='block'; 
+  }
 }
 
 function showApp() {
-  document.getElementById('password-gate').style.display='none';
-  document.getElementById('main-app').style.display='block';
+  document.getElementById('password-gate').style.display = 'none';
+  document.getElementById('main-app').style.display = 'block';
+  
   if (!isAdmin) {
-    document.getElementById('admin-actions').style.display='none';
-    document.getElementById('viewer-actions').style.display='flex';
-    document.getElementById('add-row-el').style.display='none';
-    document.getElementById('view-badge').style.display='inline';
+    document.getElementById('admin-actions').style.display = 'none';
+    document.getElementById('viewer-actions').style.display = 'flex';
+    document.getElementById('add-row-el').style.display = 'none';
+    document.getElementById('view-badge').style.display = 'inline';
   }
+
+  if (!isAnr && !isAdmin) {
+    document.querySelector('button[onclick="switchTab(\'anr\')"]').style.display = 'none';
+  }
+
   loadAll();
+  
+  if (isAnr || isAdmin) {
+    loadAnrAll(); 
+  }
 }
 
 document.getElementById('pw-input').addEventListener('keydown', e => { if(e.key==='Enter') checkPassword(); });
+
 const savedAuth = sessionStorage.getItem('ig_auth');
-if (savedAuth==='admin') { isAdmin=true; showApp(); } else if (savedAuth==='viewer') { isAdmin=false; showApp(); }
-
-function checkAnrPassword() {
-  const val = document.getElementById('anr-pw-input').value;
-  if (val === ANR_PASSWORD) {
-    sessionStorage.setItem(ANR_UNLOCKED_KEY, 'true');
-    anrUnlocked = true;
-    showAnrContent();
-  } else {
-    document.getElementById('anr-pw-err').style.display = 'block';
-  }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  const anrPwInput = document.getElementById('anr-pw-input');
-  if (anrPwInput) anrPwInput.addEventListener('keydown', e => { if(e.key==='Enter') checkAnrPassword(); });
-});
-
-function showAnrContent() {
-  document.getElementById('anr-gate').style.display = 'none';
-  document.getElementById('anr-content').style.display = 'block';
-  loadAnrAll();
-}
+if (savedAuth === 'admin') { isAdmin = true; isAnr = false; showApp(); } 
+else if (savedAuth === 'viewer') { isAdmin = false; isAnr = false; showApp(); }
+else if (savedAuth === 'anr') { isAdmin = false; isAnr = true; showApp(); }
 
 async function loadAll() { await Promise.all([loadRoster(), loadSnapshots()]); }
 
@@ -959,10 +934,7 @@ function switchTab(tab){
   document.getElementById('view-report').style.display=tab==='report'?'':'none';
   document.getElementById('view-anr').style.display=tab==='anr'?'':'none';
   if(tab==='report') renderReport();
-  if(tab==='anr'){
-    if(anrUnlocked){ document.getElementById('anr-gate').style.display='none'; document.getElementById('anr-content').style.display='block'; if(!anrRoster.length) loadAnrAll(); }
-    else { document.getElementById('anr-gate').style.display='block'; document.getElementById('anr-content').style.display='none'; }
-  }
+  if(tab==='anr' && !anrRoster.length) loadAnrAll();
 }
 
 document.getElementById('add-input').addEventListener('keydown',e=>{if(e.key==='Enter')addHandle();});
