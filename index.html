@@ -69,11 +69,6 @@
   a.handle-link:hover { text-decoration-color: #1a1a1a; }
   .sort-arrow { font-size: 10px; margin-left: 4px; color: #bbb; }
   .sort-arrow.active { color: #1a1a1a; }
-  .highlights-box { background: #f0f7ff; border: 1px solid #c8e0f8; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
-  .highlights-title { font-size: 13px; font-weight: 600; color: #1a5fa8; margin-bottom: 10px; }
-  .highlights-content { font-size: 13px; color: #1a1a1a; line-height: 1.7; }
-  .highlights-content ul { padding-left: 1.25rem; }
-  .highlights-content li { margin-bottom: 4px; }
   .actions { display: flex; gap: 8px; margin-bottom: 1rem; }
   .rank { font-size: 12px; color: #bbb; font-weight: 500; min-width: 20px; }
   .star-btn { background: none; border: none; cursor: pointer; padding: 0 4px 0 0; font-size: 15px; color: #ddd; line-height: 1; }
@@ -149,13 +144,6 @@
       <button class="primary" onclick="addHandle()">Add + fetch</button>
     </div>
     <div class="err-box" id="err-box"></div>
-
-<div id="my-roster-analysis-box" class="highlights-box" style="display:none; margin-top: 1rem;">
-  <div class="highlights-title">My Roster Insights</div>
-  <div class="highlights-content" id="my-roster-analysis-content">
-    Select stars to see personal roster analysis.
-  </div>
-</div>
     <table>
       <thead>
         <tr>
@@ -176,10 +164,6 @@
     <div class="actions">
       <button onclick="exportReport()">Copy report text</button>
       <button onclick="downloadReportPDF()">↓ Download PDF</button>
-    </div>
-    <div class="highlights-box" id="highlights-box" style="display:none;">
-      <div class="highlights-title">Weekly Highlights</div>
-      <div class="highlights-content" id="highlights-content"></div>
     </div>
     <div class="report-box">
       <div class="report-header">
@@ -256,15 +240,13 @@ const STARRED_KEY = 'ig_starred_v1';
 let roster = [], snapshots = [], currentSort = { field: 'growth', dir: 'desc' }, isAdmin = false, isAnr = false;
 let currentRosterTab = 'all', currentPeriod = 7;
 let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
-let myRosterAnalysisGenerated = false;
 
 let anrRoster = [], anrSnapshots = [], anrCurrentSort = { field: 'pct', dir: 'desc' }, anrCurrentPeriod = 7;
 
 function saveStarred() { localStorage.setItem(STARRED_KEY, JSON.stringify([...starred])); }
 function toggleStar(handle) {
   if(starred.has(handle)) starred.delete(handle); else starred.add(handle);
-  saveStarred(); myRosterAnalysisGenerated = false; renderRoster();
-  if(currentRosterTab === 'my') generateMyRosterAnalysis();
+  saveStarred(); renderRoster();
 }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function proxyUrl(url) { if(!url) return ''; return `/api/proxy-image?url=${encodeURIComponent(url)}`; }
@@ -272,14 +254,12 @@ function proxyUrl(url) { if(!url) return ''; return `/api/proxy-image?url=${enco
 async function checkPassword() {
   const val = document.getElementById('pw-input').value;
   const errEl = document.getElementById('pw-err');
-  
   try {
     const res = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: val })
     });
-
     if (res.ok) {
       const data = await res.json();
       sessionStorage.setItem('ig_auth', data.role);
@@ -298,29 +278,23 @@ async function checkPassword() {
 function showApp() {
   document.getElementById('password-gate').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
-  
   if (!isAdmin) {
     document.getElementById('admin-actions').style.display = 'none';
     document.getElementById('viewer-actions').style.display = 'flex';
     document.getElementById('add-row-el').style.display = 'none';
     document.getElementById('view-badge').style.display = 'inline';
   }
-
   if (!isAnr && !isAdmin) {
     document.querySelector('button[onclick="switchTab(\'anr\')"]').style.display = 'none';
   }
-
   loadAll();
-  
-  if (isAnr || isAdmin) {
-    loadAnrAll(); 
-  }
+  if (isAnr || isAdmin) { loadAnrAll(); }
 }
 
 document.getElementById('pw-input').addEventListener('keydown', e => { if(e.key==='Enter') checkPassword(); });
 
 const savedAuth = sessionStorage.getItem('ig_auth');
-if (savedAuth === 'admin') { isAdmin = true; isAnr = false; showApp(); } 
+if (savedAuth === 'admin') { isAdmin = true; isAnr = false; showApp(); }
 else if (savedAuth === 'viewer') { isAdmin = false; isAnr = false; showApp(); }
 else if (savedAuth === 'anr') { isAdmin = false; isAnr = true; showApp(); }
 
@@ -336,10 +310,7 @@ async function loadSnapshots() {
   catch(e) { snapshots=[]; }
 }
 
-async function loadAnrAll() {
-  await Promise.all([loadAnrRoster(), loadAnrSnapshots()]);
-  // Skipping analysis for now to focus on emoji alerts
-}
+async function loadAnrAll() { await Promise.all([loadAnrRoster(), loadAnrSnapshots()]); }
 
 async function loadAnrRoster() {
   try { const res=await fetch('/api/anr-roster'); const data=await res.json(); anrRoster=data.roster||[]; renderAnrRoster(); }
@@ -402,7 +373,7 @@ function setPeriod(days) {
   document.querySelectorAll('.period-tab').forEach(el=>el.classList.remove('active'));
   const map={1:'period-1',7:'period-7',14:'period-14',30:'period-30'};
   const el=document.getElementById(map[days]); if(el) el.classList.add('active');
-  myRosterAnalysisGenerated=false; renderRoster();
+  renderRoster();
 }
 
 function setAnrPeriod(days) {
@@ -412,6 +383,7 @@ function setAnrPeriod(days) {
   const el=document.getElementById(map[days]); if(el) el.classList.add('active');
   renderAnrRoster();
 }
+
 function getSnapshotPair() {
   if(!snapshots.length) return null;
   const latest=snapshots[snapshots.length-1];
@@ -468,9 +440,6 @@ function switchRosterTab(tab){
     const elTab=el.getAttribute('onclick').includes("'all'") ? 'all' : 'my';
     el.classList.toggle('active', elTab===tab);
   });
-  const analysisBox=document.getElementById('my-roster-analysis-box');
-  if(tab==='my'){ analysisBox.style.display='block'; }
-  else { analysisBox.style.display='none'; }
   renderRoster();
 }
 
@@ -554,10 +523,7 @@ function renderAnrRoster(){
     const igUrl=`https://www.instagram.com/${r.handle}/`;
     const picUrl=r.profilePic?proxyUrl(r.profilePic):'';
     const avatarHtml=picUrl?`<img src="${picUrl}" class="avatar" alt="" onerror="this.outerHTML='<span class=\\'avatar-placeholder\\'></span>'" />`:`<span class="avatar-placeholder"></span>`;
-    
-    // Add 🚨 alert emoji if growth is 4.5% or higher
     const alertEmoji = r._pct >= 4.5 ? '🚨 ' : '';
-    
     const genre=r.genre||'';
     const note=r.note||'';
     const genreHtml=`<span class="genre-pill" onclick="editAnrGenre(${i})" title="Click to edit">${genre||'+ genre'}</span>`;
@@ -691,13 +657,12 @@ async function retryHandle(i) {
     if (result.profile_pic_url) r.profilePic = result.profile_pic_url;
     r.status = 'ok';
     r.updatedAt = Date.now();
-  } catch(e) {
-    r.status = 'error';
-  }
+  } catch(e) { r.status = 'error'; }
   renderRoster();
   updateLastUpdated();
   await persistRoster();
 }
+
 async function refreshAll(){
   const btn=document.getElementById('refresh-btn'),pb=document.getElementById('progress-bar'),pf=document.getElementById('progress-fill');
   btn.disabled=true;btn.textContent='Refreshing...';pb.style.display='block';pf.style.width='0%';
@@ -746,11 +711,6 @@ async function saveAnrSnapshot(silent=false){
   if(anrSnapshots.length>120) anrSnapshots.splice(0,anrSnapshots.length-120);
   await persistAnrSnapshots();
 }
-
-// AI Analysis functions kept as stubs if needed later
-async function generateAnrAnalysis() {}
-async function generateMyRosterAnalysis() {}
-async function generateHighlights(latest,prev) {}
 
 function renderReport(){
   const tbody=document.getElementById('report-rows'),dateEl=document.getElementById('report-date');
