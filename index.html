@@ -258,8 +258,8 @@
           <th style="width:4%">#</th>
           <th style="width:26%" onclick="sortAnrBy('handle')">Handle <span class="sort-arrow" id="anr-sort-handle">↕</span></th>
           <th style="width:14%" onclick="sortAnrBy('followers')">Followers <span class="sort-arrow" id="anr-sort-followers">↕</span></th>
-          <th style="width:18%" onclick="sortAnrBy('growth')">Growth <span class="sort-arrow active" id="anr-sort-growth">▼</span></th>
-          <th style="width:18%" onclick="sortAnrBy('pct')">Growth % <span class="sort-arrow" id="anr-sort-pct">↕</span></th>
+          <th style="width:18%" onclick="sortAnrBy('growth')">Growth <span class="sort-arrow" id="anr-sort-growth">↕</span></th>
+          <th style="width:18%" onclick="sortAnrBy('pct')">Growth % <span class="sort-arrow active" id="anr-sort-pct">▼</span></th>
           <th style="width:14%">Genre</th>
           <th style="width:12%">Notes</th>
           <th style="width:6%"></th>
@@ -281,7 +281,7 @@ let currentRosterTab = 'all', currentPeriod = 7;
 let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
 let myRosterAnalysisGenerated = false;
 
-let anrRoster = [], anrSnapshots = [], anrCurrentSort = { field: 'growth', dir: 'desc' }, anrCurrentPeriod = 7;
+let anrRoster = [], anrSnapshots = [], anrCurrentSort = { field: 'pct', dir: 'desc' }, anrCurrentPeriod = 7;
 
 function saveStarred() { localStorage.setItem(STARRED_KEY, JSON.stringify([...starred])); }
 function toggleStar(handle) {
