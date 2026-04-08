@@ -770,7 +770,6 @@ async function generateAnrAnalysis(){
   
   const gainers=enriched.filter(e=>e.diff>0);
   
-  // --- NEW LOGIC: Catch accounts with >= 4.5% growth ---
   const highGrowth = enriched.filter(e => e.pct >= 4.5);
   const highGrowthText = highGrowth.length > 0 
     ? `\n🚨 HIGH GROWTH ALERTS (>= 4.5%): ` + highGrowth.map(e => `@${e.handle} (+${e.pct.toFixed(2)}%)`).join(', ') 
@@ -783,8 +782,8 @@ async function generateAnrAnalysis(){
     `@${e.handle}${e.genre?' ('+e.genre+')':''}: ${fmt(e.followers)} followers${e.diff!==null?', '+(e.diff>=0?'+':'')+Number(e.diff).toLocaleString() + ' (' + (e.pct>=0?'+':'') + e.pct.toFixed(2) + '%)':', no comparison data'}`
   ).join('\n');
   
-  // --- UPDATED PROMPT ---
-  const prompt=`You are an A&R analyst at a major record label reviewing a list of unsigned Instagram prospects.\n\nTotal prospects tracked: ${enriched.length}\nCombined followers: ${fmt(total)}\nNet growth this period: ${totalGrowth>=0?'+':''}${Number(totalGrowth).toLocaleString()}\nGaining momentum: ${gainers.length} prospects${highGrowthText}\n\nTop prospects by follower growth:\n${artistLines}\n\nWrite 3-5 bullet points identifying the strongest prospects, fastest-growing accounts, and any patterns worth noting for signing consideration. You MUST explicitly flag and call out any accounts in the 'HIGH GROWTH ALERTS' list as high-priority targets because they crossed the 4.5% threshold. Be direct and specific. Start each bullet with a dash. No intro or conclusion.`;
+  // --- ADDED THE EMOJI INSTRUCTION HERE ---
+  const prompt=`You are an A&R analyst at a major record label reviewing a list of unsigned Instagram prospects.\n\nTotal prospects tracked: ${enriched.length}\nCombined followers: ${fmt(total)}\nNet growth this period: ${totalGrowth>=0?'+':''}${Number(totalGrowth).toLocaleString()}\nGaining momentum: ${gainers.length} prospects${highGrowthText}\n\nTop prospects by follower growth:\n${artistLines}\n\nWrite 3-5 bullet points identifying the strongest prospects, fastest-growing accounts, and any patterns worth noting for signing consideration. You MUST explicitly flag and call out any accounts in the 'HIGH GROWTH ALERTS' list as high-priority targets because they crossed the 4.5% threshold, and place a 🚨 emoji directly next to their handle. Be direct and specific. Start each bullet with a dash. No intro or conclusion.`;
   
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content:prompt}]})});
@@ -793,8 +792,9 @@ async function generateAnrAnalysis(){
     const lines=text.split('\n').filter(l=>l.trim());
     content.innerHTML='<ul>'+lines.map(l=>`<li>${l.replace(/^[-•]\s*/,'')}</li>`).join('')+'</ul>';
   }catch(e){
+    // --- UPDATED FALLBACK TO ALSO USE THE EMOJI ---
     const fallbackBullets = [`${enriched.length} prospects tracked with ${fmt(total)} combined followers.`];
-    if(highGrowth.length > 0) fallbackBullets.push(`🚨 High Growth Alert: ${highGrowth.map(h => '@' + h.handle).join(', ')} exceeded 4.5% growth!`);
+    if(highGrowth.length > 0) fallbackBullets.push(`🚨 High Growth Alert: ${highGrowth.map(h => '🚨 @' + h.handle).join(', ')} exceeded 4.5% growth!`);
     else if(gainers.length) fallbackBullets.push(`Top prospect by raw growth: @${gainers[0].handle} (+${Number(gainers[0].diff).toLocaleString()})`);
     content.innerHTML='<ul>'+fallbackBullets.map(b=>`<li>${b}</li>`).join('')+'</ul>';
   }
