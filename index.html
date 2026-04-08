@@ -262,16 +262,29 @@ function toggleStar(handle) {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function proxyUrl(url) { if(!url) return ''; return `/api/proxy-image?url=${encodeURIComponent(url)}`; }
 
-function checkPassword() {
+async function checkPassword() {
   const val = document.getElementById('pw-input').value;
-  if (val === ADMIN_PASSWORD) { 
-    sessionStorage.setItem('ig_auth','admin'); isAdmin = true; isAnr = false; showApp(); 
-  } else if (val === VIEW_PASSWORD) { 
-    sessionStorage.setItem('ig_auth','viewer'); isAdmin = false; isAnr = false; showApp(); 
-  } else if (val === ANR_PASSWORD) { 
-    sessionStorage.setItem('ig_auth','anr'); isAdmin = false; isAnr = true; showApp(); 
-  } else { 
-    document.getElementById('pw-err').style.display='block'; 
+  const errEl = document.getElementById('pw-err');
+  
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: val })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      sessionStorage.setItem('ig_auth', data.role);
+      isAdmin = (data.role === 'admin');
+      isAnr = (data.role === 'anr');
+      showApp();
+    } else {
+      errEl.style.display = 'block';
+    }
+  } catch (e) {
+    console.error("Login error", e);
+    alert("Connection error. Please try again.");
   }
 }
 
