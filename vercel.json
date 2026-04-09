@@ -2,15 +2,31 @@
   "crons": [
     {
       "path": "/api/cron-snapshot-daily",
-      "schedule": "0 14 * * *"
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron-anr-batch?batch=0",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron-anr-batch?batch=1",
+      "schedule": "15 13 * * *"
+    },
+    {
+      "path": "/api/cron-anr-batch?batch=2",
+      "schedule": "30 13 * * *"
+    },
+    {
+      "path": "/api/cron-anr-batch?batch=3",
+      "schedule": "45 13 * * *"
     }
   ],
   "functions": {
     "api/cron-snapshot-daily.js": {
       "maxDuration": 300
     },
-    "api/cron-snapshot-anr.js": {
-      "maxDuration": 600
+    "api/cron-anr-batch.js": {
+      "maxDuration": 800
     },
     "api/followers.js": {
       "maxDuration": 30
