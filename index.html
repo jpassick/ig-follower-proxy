@@ -56,7 +56,7 @@
   .muted { color: #aaa; }
   .pill-err { background: #fdf0ee; color: #c0392b; font-size: 11px; padding: 2px 8px; border-radius: 20px; }
   .report-box { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
-  .report-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+  .report-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
   .report-title { font-size: 14px; font-weight: 600; }
   .report-date { font-size: 12px; color: #888; }
   .report-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -85,12 +85,6 @@
   .genre-pill:hover { background: #ddeeff; }
   .csv-import-row { display: flex; gap: 8px; margin-bottom: 1rem; align-items: center; }
   .csv-label { font-size: 12px; color: #888; }
-  .week-nav { display: flex; align-items: center; gap: 10px; }
-  .week-nav-btn { font-size: 14px; padding: 4px 10px; border-radius: 6px; border: 1px solid #ddd; background: #fff; cursor: pointer; color: #555; line-height: 1; }
-  .week-nav-btn:hover:not(:disabled) { background: #f0f0f0; }
-  .week-nav-btn:disabled { opacity: 0.3; cursor: default; }
-  .week-nav-label { font-size: 12px; color: #888; min-width: 160px; text-align: center; }
-  .week-nav-current { font-size: 11px; color: #bbb; margin-left: 4px; }
 </style>
 </head>
 <body>
@@ -174,14 +168,7 @@
     <div class="report-box">
       <div class="report-header">
         <div class="report-title">Weekly follower report</div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <div class="week-nav">
-            <button class="week-nav-btn" id="week-prev-btn" onclick="navigateWeek(-1)" title="Previous week">‹</button>
-            <span class="week-nav-label" id="week-nav-label">—</span>
-            <button class="week-nav-btn" id="week-next-btn" onclick="navigateWeek(1)" title="Next week">›</button>
-          </div>
-          <span class="week-nav-current" id="week-nav-current"></span>
-        </div>
+        <div class="report-date" id="report-date"></div>
       </div>
       <table class="report-table">
         <thead>
@@ -255,10 +242,6 @@ let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
 
 let anrRoster = [], anrSnapshots = [], anrCurrentSort = { field: 'pct', dir: 'desc' }, anrCurrentPeriod = 7;
 
-// Week navigator state
-let reportWeekIndex = 0; // 0 = most recent, 1 = one week back, etc.
-let reportWeeks = []; // array of {endSnap, prevSnap} pairs, index 0 = most recent
-
 function saveStarred() { localStorage.setItem(STARRED_KEY, JSON.stringify([...starred])); }
 function toggleStar(handle) {
   if(starred.has(handle)) starred.delete(handle); else starred.add(handle);
@@ -326,7 +309,7 @@ async function loadRoster() {
 }
 
 async function loadSnapshots() {
-  try { const res=await fetch('/api/snapshots'); const data=await res.json(); snapshots=data.snapshots||[]; buildReportWeeks(); renderReport(); updateLastUpdated(); }
+  try { const res=await fetch('/api/snapshots'); const data=await res.json(); snapshots=data.snapshots||[]; renderRoster(); updateLastUpdated(); }
   catch(e) { snapshots=[]; }
 }
 
@@ -379,10 +362,7 @@ async function persistRoster() {
 }
 
 async function persistSnapshots() {
-  try {
-    const res = await fetch('/api/snapshots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snapshots})});
-    if (!res.ok) { console.error('persistSnapshots failed:', res.status); }
-  } catch(e) { console.error('persistSnapshots error:', e); }
+  try { await fetch('/api/snapshots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snapshots})}); } catch(e) {}
 }
 
 async function persistAnrRoster() {
@@ -442,46 +422,6 @@ function getAnrSnapshotPair() {
   }
   return{latest,prev:best};
 }
-
-// ─── Week navigator logic ────────────────────────────────────────────────────
-
-function buildReportWeeks() {
-  reportWeeks = [];
-  if (snapshots.length < 1) return;
-
-  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-
-  let endIdx = snapshots.length - 1;
-
-  while (endIdx >= 0) {
-    const endSnap = snapshots[endIdx];
-    const targetPrevTs = endSnap.ts - SEVEN_DAYS;
-
-    let bestIdx = -1;
-    let bestDist = Infinity;
-    for (let i = endIdx - 1; i >= 0; i--) {
-      const dist = Math.abs(snapshots[i].ts - targetPrevTs);
-      if (dist < bestDist) { bestDist = dist; bestIdx = i; }
-    }
-
-    const prevSnap = bestIdx >= 0 ? snapshots[bestIdx] : null;
-    reportWeeks.push({ endSnap, prevSnap });
-
-    if (bestIdx <= 0) break;
-    endIdx = bestIdx;
-  }
-
-  reportWeekIndex = 0;
-}
-
-function navigateWeek(dir) {
-  const newIdx = reportWeekIndex + dir;
-  if (newIdx < 0 || newIdx >= reportWeeks.length) return;
-  reportWeekIndex = newIdx;
-  renderReport();
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 function fmt(n){if(n==null)return '—';if(n>=1000000)return (n/1000000).toFixed(2)+'M';if(n>=1000)return (n/1000).toFixed(1)+'K';return Number(n).toLocaleString();}
 function pct(cur,prev){if(!prev)return null;return(cur-prev)/prev*100;}
@@ -777,10 +717,7 @@ async function saveSnapshot(silent=false){
   const valid=roster.filter(r=>r.followers!=null);
   if(!valid.length){if(!silent)showErr('No data yet.');return;}
   const snap={date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),ts:Date.now(),data:valid.map(r=>({handle:r.handle,followers:r.followers}))};
-  snapshots.push(snap);
-  buildReportWeeks();
-  await persistSnapshots();
-  renderReport();
+  snapshots.push(snap);await persistSnapshots();renderReport();
   if(!silent)alert('Snapshot saved — '+snap.date);
 }
 
@@ -793,72 +730,29 @@ async function saveAnrSnapshot(silent=false){
   await persistAnrSnapshots();
 }
 
-function fmtSnapDate(snap) {
-  if (!snap) return '?';
-  if (snap.date) return snap.date;
-  return new Date(snap.ts).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
-}
-
 function renderReport(){
-  const tbody = document.getElementById('report-rows');
-  const navLabel = document.getElementById('week-nav-label');
-  const navCurrent = document.getElementById('week-nav-current');
-  const prevBtn = document.getElementById('week-prev-btn');
-  const nextBtn = document.getElementById('week-next-btn');
-
-  if (!snapshots.length || !reportWeeks.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="muted" style="font-size:13px;padding:12px 0;">No snapshots yet.</td></tr>';
-    navLabel.textContent = '—';
-    navCurrent.textContent = '';
-    prevBtn.disabled = true;
-    nextBtn.disabled = true;
-    return;
-  }
-
-  const week = reportWeeks[reportWeekIndex];
-  const { endSnap, prevSnap } = week;
-
-  const startLabel = prevSnap ? fmtSnapDate(prevSnap) : '—';
-  const endLabel = fmtSnapDate(endSnap);
-  navLabel.textContent = `${startLabel} – ${endLabel}`;
-  navCurrent.textContent = reportWeekIndex === 0 ? '(current)' : `(${reportWeekIndex} week${reportWeekIndex > 1 ? 's' : ''} ago)`;
-  prevBtn.disabled = reportWeekIndex >= reportWeeks.length - 1;
-  nextBtn.disabled = reportWeekIndex <= 0;
-
-  const sorted = [...endSnap.data].map(d => {
-    const pe = prevSnap ? prevSnap.data.find(p => p.handle === d.handle) : null;
-    const diff = pe ? d.followers - pe.followers : null;
-    const p = pe ? pct(d.followers, pe.followers) : null;
-    return { ...d, _diff: diff, _pct: p };
-  }).sort((a, b) => (b._diff ?? -Infinity) - (a._diff ?? -Infinity));
-
-  tbody.innerHTML = sorted.map((d, idx) => {
-    const rEntry = roster.find(r => r.handle === d.handle);
-    const picUrl = rEntry?.profilePic ? proxyUrl(rEntry.profilePic) : '';
-    const avatarHtml = picUrl ? `<img src="${picUrl}" class="avatar" alt="" style="width:24px;height:24px;" onerror="this.style.display='none'" />` : '';
-    return `<tr>
-      <td style="color:#bbb;font-size:12px;">${idx+1}</td>
-      <td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="https://www.instagram.com/${d.handle}/" target="_blank">@${d.handle}</a></div></td>
-      <td><strong>${fmt(d.followers)}</strong></td>
-      <td>${d._diff !== null ? renderGrowth(d._diff) : '<span class="muted">first entry</span>'}</td>
-      <td>${d._diff !== null ? renderPct(d._pct) : '<span class="muted">—</span>'}</td>
-    </tr>`;
+  const tbody=document.getElementById('report-rows'),dateEl=document.getElementById('report-date');
+  if(!snapshots.length){tbody.innerHTML='<tr><td colspan="5" class="muted" style="font-size:13px;padding:12px 0;">No snapshots yet.</td></tr>';return;}
+  const weekly=snapshots.filter(s=>s.type==='weekly');
+  const latest=snapshots[snapshots.length-1];
+  let prev=null;
+  if(weekly.length>1){prev=weekly[weekly.length-2];}
+  else{const cutoff=latest.ts-(7*24*60*60*1000);const aged=snapshots.slice(0,-1).filter(s=>s.ts<=cutoff);prev=aged.length?aged[aged.length-1]:snapshots[0];}
+  dateEl.textContent=prev?`${prev.date} – ${latest.date}`:latest.date;
+  const sorted=[...latest.data].map(d=>{const pe=prev?prev.data.find(p=>p.handle===d.handle):null;const diff=pe?d.followers-pe.followers:null;const p=pe?pct(d.followers,pe.followers):null;return{...d,_diff:diff,_pct:p};}).sort((a,b)=>(b._diff??-Infinity)-(a._diff??-Infinity));
+  tbody.innerHTML=sorted.map((d,idx)=>{
+    const rEntry=roster.find(r=>r.handle===d.handle);
+    const picUrl=rEntry?.profilePic?proxyUrl(rEntry.profilePic):'';
+    const avatarHtml=picUrl?`<img src="${picUrl}" class="avatar" alt="" style="width:24px;height:24px;" onerror="this.style.display='none'" />`:'';
+    return `<tr><td style="color:#bbb;font-size:12px;">${idx+1}</td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="https://www.instagram.com/${d.handle}/" target="_blank">@${d.handle}</a></div></td><td><strong>${fmt(d.followers)}</strong></td><td>${d._diff!==null?renderGrowth(d._diff):'<span class="muted">first entry</span>'}</td><td>${d._diff!==null?renderPct(d._pct):'<span class="muted">—</span>'}</td></tr>`;
   }).join('');
 }
 
 function exportReport(){
-  if(!snapshots.length || !reportWeeks.length){alert('No snapshot data yet.');return;}
-  const week = reportWeeks[reportWeekIndex];
-  const { endSnap, prevSnap } = week;
-  let txt = `Instagram Weekly Report — ${fmtSnapDate(endSnap)}\n${'─'.repeat(44)}\n`;
-  if (prevSnap) txt += `Compared to: ${fmtSnapDate(prevSnap)}\n${'─'.repeat(44)}\n`;
-  [...endSnap.data].sort((a,b)=>b.followers-a.followers).forEach((d,idx)=>{
-    const pe=prevSnap?prevSnap.data.find(p=>p.handle===d.handle):null;
-    const p=pe?pct(d.followers,pe.followers):null;
-    const diff=pe?d.followers-pe.followers:null;
-    const ch=diff!==null?` | ${diff>=0?'+':''}${Number(diff).toLocaleString()} (${p!=null?(p>=0?'+':'')+p.toFixed(2)+'%':'—'})`:'  | first entry';
-    txt+=`${idx+1}. @${d.handle}: ${fmt(d.followers)}${ch}\n`;
-  });
+  if(!snapshots.length){alert('No snapshot data yet.');return;}
+  const latest=snapshots[snapshots.length-1],prev=snapshots.length>1?snapshots[snapshots.length-2]:null;
+  let txt=`Instagram Weekly Report — ${latest.date}\n${'─'.repeat(44)}\n`;
+  [...latest.data].sort((a,b)=>b.followers-a.followers).forEach((d,idx)=>{const pe=prev?prev.data.find(p=>p.handle===d.handle):null;const p=pe?pct(d.followers,pe.followers):null;const diff=pe?d.followers-pe.followers:null;const ch=diff!==null?` | ${diff>=0?'+':''}${Number(diff).toLocaleString()} (${p!=null?(p>=0?'+':'')+p.toFixed(2)+'%':'—'})`:'  | first entry';txt+=`${idx+1}. @${d.handle}: ${fmt(d.followers)}${ch}\n`;});
   navigator.clipboard.writeText(txt).then(()=>alert('Copied!')).catch(()=>alert(txt));
 }
 
@@ -891,16 +785,15 @@ function downloadPDF(){
 }
 
 function downloadReportPDF(){
-  if(!snapshots.length || !reportWeeks.length){alert('No snapshot data yet.');return;}
+  if(!snapshots.length){alert('No snapshot data yet.');return;}
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
-  const week = reportWeeks[reportWeekIndex];
-  const { endSnap, prevSnap } = week;
-  const sorted=[...endSnap.data].map(d=>{const pe=prevSnap?prevSnap.data.find(p=>p.handle===d.handle):null;const diff=pe?d.followers-pe.followers:null;const p=pe?pct(d.followers,pe.followers):null;return{...d,_diff:diff,_pct:p};}).sort((a,b)=>(b._diff??-Infinity)-(a._diff??-Infinity));
+  const latest=snapshots[snapshots.length-1],prev=snapshots.length>1?snapshots[snapshots.length-2]:null;
+  const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const sorted=[...latest.data].sort((a,b)=>b.followers-a.followers).map(d=>{const pe=prev?prev.data.find(p=>p.handle===d.handle):null;const diff=pe?d.followers-pe.followers:null;const p=pe?pct(d.followers,pe.followers):null;return{...d,_diff:diff,_pct:p};});
   doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('Weekly Follower Report',14,20);
   doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(120);
-  const dateRange = prevSnap ? `${fmtSnapDate(prevSnap)} – ${fmtSnapDate(endSnap)}` : fmtSnapDate(endSnap);
-  doc.text(`Alamo Records / Santa Anna — ${dateRange}`,14,28);doc.setTextColor(0);
-  const tableData=sorted.map((r,idx)=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+Number(r._diff).toLocaleString():'—';const growthPct=r._diff!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'first entry';return[idx+1,`@${r.handle}`,fmt(r.followers),growth,growthPct];});
+  doc.text(`Alamo Records / Santa Anna Roster — ${today}`,14,28);doc.setTextColor(0);
+  const tableData=sorted.map((r,idx)=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+Number(r._diff).toLocaleString():'—';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'first entry';return[idx+1,`@${r.handle}`,fmt(r.followers),growth,growthPct];});
   doc.autoTable({startY:36,head:[['#','Handle','Followers','Follower Growth','Follower Growth %']],body:tableData,styles:{fontSize:10,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:12},1:{cellWidth:60},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:40}}});
   doc.save(`Alamo-Weekly-Report-${getFileDateStr()}.pdf`);
 }
