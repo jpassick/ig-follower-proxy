@@ -186,13 +186,16 @@
   </div>
 
   <div id="view-anr" style="display:none;">
-    <div class="top-actions">
+    <div class="top-actions" id="anr-admin-actions">
+      <button class="secondary" id="anr-refresh-btn" onclick="anrRefreshAll()">↻ Refresh all</button>
       <button class="secondary" onclick="anrDownloadCSV()">↓ Download CSV</button>
       <span class="saving" id="anr-saving-indicator">Saving...</span>
     </div>
-
+    <div class="top-actions" id="anr-viewer-actions" style="display:none;">
+      <button class="secondary" onclick="anrDownloadCSV()">↓ Download CSV</button>
+    </div>
+    <p class="last-updated" id="anr-last-updated" style="margin-bottom:0.5rem;"></p>
     <div class="progress-bar" id="anr-progress-bar"><div class="progress-bar-fill" id="anr-progress-fill"></div></div>
-
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
       <div class="period-tabs">
         <span class="period-label">Growth period:</span>
@@ -202,20 +205,16 @@
         <button class="period-tab" onclick="setAnrPeriod(30)" id="anr-period-30">30 days</button>
       </div>
     </div>
-
-    <div class="add-row">
+    <div class="add-row" id="anr-add-row-el">
       <input type="text" id="anr-add-input" placeholder="Instagram handle, e.g. unsignedartist" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
       <button class="primary" onclick="anrAddHandle()">Add + fetch</button>
     </div>
-
-    <div class="csv-import-row">
+    <div class="csv-import-row" id="anr-csv-row">
       <span class="csv-label">Bulk import:</span>
       <input type="file" id="anr-csv-input" accept=".csv" style="font-size:12px;" onchange="anrImportCSV(event)" />
       <span class="csv-label" id="anr-csv-status"></span>
     </div>
-
     <div class="err-box" id="anr-err-box"></div>
-
     <table>
       <thead>
         <tr>
@@ -283,6 +282,10 @@ function showApp() {
     document.getElementById('viewer-actions').style.display = 'flex';
     document.getElementById('add-row-el').style.display = 'none';
     document.getElementById('view-badge').style.display = 'inline';
+    document.getElementById('anr-admin-actions').style.display = 'none';
+    document.getElementById('anr-viewer-actions').style.display = 'flex';
+    document.getElementById('anr-add-row-el').style.display = 'none';
+    document.getElementById('anr-csv-row').style.display = 'none';
   }
   if (!isAnr && !isAdmin) {
     document.querySelector('button[onclick="switchTab(\'anr\')"]').style.display = 'none';
@@ -310,7 +313,7 @@ async function loadSnapshots() {
   catch(e) { snapshots=[]; }
 }
 
-async function loadAnrAll() { await Promise.all([loadAnrRoster(), loadAnrSnapshots()]); }
+async function loadAnrAll() { await Promise.all([loadAnrRoster(), loadAnrSnapshots(), loadAnrLastRefreshed()]); }
 
 async function loadAnrRoster() {
   try { const res=await fetch('/api/anr-roster'); const data=await res.json(); anrRoster=data.roster||[]; renderAnrRoster(); }
@@ -320,6 +323,20 @@ async function loadAnrRoster() {
 async function loadAnrSnapshots() {
   try { const res=await fetch('/api/anr-snapshots'); const data=await res.json(); anrSnapshots=data.snapshots||[]; renderAnrRoster(); }
   catch(e) { anrSnapshots=[]; }
+}
+
+async function loadAnrLastRefreshed() {
+  try {
+    const res = await fetch('/api/anr-status');
+    const data = await res.json();
+    const el = document.getElementById('anr-last-updated');
+    if (data.lastRefreshed) {
+      const d = new Date(data.lastRefreshed);
+      el.textContent = `Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
+    } else {
+      el.textContent = '';
+    }
+  } catch(e) {}
 }
 
 function updateLastUpdated() {
@@ -693,6 +710,7 @@ async function anrRefreshAll(){
   pb.style.display='none';btn.disabled=false;btn.textContent='↻ Refresh all';
   await persistAnrRoster();
   await saveAnrSnapshot(true);
+  await loadAnrLastRefreshed();
 }
 
 async function saveSnapshot(silent=false){
@@ -745,6 +763,13 @@ function downloadCSV(){
   let csv='Rank,Handle,Followers,Follower Growth,Follower Growth %\n';
   sorted.forEach((r,idx)=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';csv+=`${idx+1},@${r.handle},${r.followers!=null?r.followers:''},${growth},${growthPct}\n`;});
   const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
+}
+
+function anrDownloadCSV(){
+  const sorted=getSortedAnrRoster();
+  let csv='Rank,Handle,Followers,Growth,Growth %,Genre,Notes\n';
+  sorted.forEach((r,idx)=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';csv+=`${idx+1},@${r.handle},${r.followers!=null?r.followers:''},${growth},${growthPct},"${r.genre||''}","${r.note||''}"\n`;});
+  const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Alamo-ANR-Report-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
 }
 
 function downloadPDF(){
