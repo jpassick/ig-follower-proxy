@@ -9,6 +9,7 @@ const redis = new Redis({
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 const ROSTER_KEY = 'roster';
 const SNAPSHOTS_KEY = 'snapshots';
+
 async function fetchFollowerCount(handle) {
   const url = `https://instagram-best-experience.p.rapidapi.com/user/info?username=${handle}`;
   const res = await fetch(url, {
@@ -26,6 +27,7 @@ async function fetchFollowerCount(handle) {
     profilePic: user.profile_pic_url_hd || user.profile_pic_url || null,
   };
 }
+
 export default async function handler(req, res) {
   const authHeader = req.headers['authorization'];
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -39,6 +41,7 @@ export default async function handler(req, res) {
     const now = Date.now();
     const results = [];
     const errors = [];
+
     for (const artist of roster) {
       // Skip any entry with a missing or invalid handle
       if (!artist.handle || typeof artist.handle !== 'string' || !artist.handle.trim()) {
@@ -57,8 +60,10 @@ export default async function handler(req, res) {
         console.error(`Error refreshing ${artist.handle}:`, err.message);
       }
     }
+
     // Save updated roster
     await redis.set(ROSTER_KEY, roster);
+
     // Save daily snapshot
     const snapshots = await redis.get(SNAPSHOTS_KEY) || [];
     const snapshot = {
@@ -68,11 +73,14 @@ export default async function handler(req, res) {
         .filter(a => a.handle && a.followers != null)
         .map(a => ({ handle: a.handle, followers: a.followers })),
     };
+
     const dayOfWeek = new Date().getUTCDay();
     if (dayOfWeek === 1) snapshot.type = 'weekly';
+
     snapshots.push(snapshot);
     if (snapshots.length > 120) snapshots.splice(0, snapshots.length - 120);
     await redis.set(SNAPSHOTS_KEY, snapshots);
+
     console.log(`Daily cron complete: ${results.length} refreshed, ${errors.length} errors`);
     return res.status(200).json({
       success: true,
