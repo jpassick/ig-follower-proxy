@@ -1,15 +1,36 @@
 // api/cron-anr-batch.js
 // Called by each batch cron with a batchIndex parameter
-import { Redis } from '@upstash/redis';
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
+
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
-const ANR_KEY = 'anr-roster';
+const KV_URL = process.env.KV_REST_API_URL;
+const KV_TOKEN = process.env.KV_REST_API_TOKEN;
 const ANR_SNAPSHOTS_KEY = 'anr-snapshots';
 const ANR_LAST_REFRESHED_KEY = 'anr-last-refreshed';
 const BATCH_SIZE = 600;
+
+async function kvGet(key) {
+  const r = await fetch(`${KV_URL}/get/${key}`, {
+    headers: { Authorization: `Bearer ${KV_TOKEN}` }
+  });
+  const data = await r.json();
+  if (!data.result) return null;
+  let val = data.result;
+  while (typeof val === 'string') {
+    try { val = JSON.parse(val); } catch(e) { break; }
+  }
+  if (Array.isArray(val) && val.length === 1 && typeof val[0] === 'string') {
+    try { val = JSON.parse(val[0]); } catch(e) {}
+  }
+  return val;
+}
+
+async function kvSet(key, value) {
+  await fetch(`${KV_URL}/set/${key}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify([JSON.stringify(value)])
+  });
+}
 
 async function fetchFollowerCount(handle) {
   const url = `https://instagram-best-experience.p.rapidapi.com/user/info?username=${handle}`;
@@ -30,14 +51,17 @@ async function fetchFollowerCount(handle) {
 }
 
 async function loadFullRoster() {
-  const meta = await redis.get(`${ANR_KEY}:meta`);
+  // Try chunked storage first
+  const meta = await kvGet('anr-roster:meta');
   if (meta && meta.chunks) {
     const chunks = await Promise.all(
-      Array.from({ length: meta.chunks }, (_, i) => redis.get(`${ANR_KEY}:chunk:${i}`))
+      Array.from({ length: meta.chunks }, (_, i) => kvGet(`anr-roster:chunk:${i}`))
     );
     return chunks.map(c => (Array.isArray(c) ? c : [])).flat().filter(Boolean);
   }
-  return await redis.get(ANR_KEY) || [];
+  // Fall back to single key
+  const roster = await kvGet('anr-roster');
+  return Array.isArray(roster) ? roster : [];
 }
 
 async function saveFullRoster(roster) {
@@ -46,16 +70,22 @@ async function saveFullRoster(roster) {
   for (let i = 0; i < roster.length; i += CHUNK_SIZE) {
     chunks.push(roster.slice(i, i + CHUNK_SIZE));
   }
-  const oldMeta = await redis.get(`${ANR_KEY}:meta`);
+
+  // Delete any old extra chunks
+  const oldMeta = await kvGet('anr-roster:meta');
   if (oldMeta && oldMeta.chunks > chunks.length) {
-    const deleteKeys = Array.from(
-      { length: oldMeta.chunks - chunks.length },
-      (_, i) => `${ANR_KEY}:chunk:${chunks.length + i}`
+    await Promise.all(
+      Array.from({ length: oldMeta.chunks - chunks.length }, (_, i) =>
+        fetch(`${KV_URL}/del/anr-roster:chunk:${chunks.length + i}`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${KV_TOKEN}` }
+        })
+      )
     );
-    await Promise.all(deleteKeys.map(k => redis.del(k)));
   }
-  await Promise.all(chunks.map((chunk, i) => redis.set(`${ANR_KEY}:chunk:${i}`, chunk)));
-  await redis.set(`${ANR_KEY}:meta`, { chunks: chunks.length, total: roster.length });
+
+  await Promise.all(chunks.map((chunk, i) => kvSet(`anr-roster:chunk:${i}`, chunk)));
+  await kvSet('anr-roster:meta', { chunks: chunks.length, total: roster.length });
 }
 
 export default async function handler(req, res) {
@@ -69,6 +99,7 @@ export default async function handler(req, res) {
   try {
     const roster = await loadFullRoster();
     if (!roster.length) {
+      console.log('No A&R prospects in roster');
       return res.status(200).json({ message: 'No A&R prospects in roster' });
     }
 
@@ -76,6 +107,8 @@ export default async function handler(req, res) {
     const start = batchIndex * BATCH_SIZE;
     const end = Math.min(start + BATCH_SIZE, roster.length);
     const batch = roster.slice(start, end);
+
+    console.log(`A&R batch ${batchIndex}/${totalBatches - 1}: processing artists ${start}-${end}`);
 
     const now = Date.now();
     const results = [];
@@ -105,29 +138,27 @@ export default async function handler(req, res) {
     }
 
     await saveFullRoster(roster);
-
-    // Update last refreshed timestamp for A&R section
-    await redis.set(ANR_LAST_REFRESHED_KEY, now);
+    await kvSet(ANR_LAST_REFRESHED_KEY, now);
 
     // If this is the last batch, save a snapshot
     const isLastBatch = batchIndex >= totalBatches - 1;
     if (isLastBatch) {
-      const snapshots = await redis.get(ANR_SNAPSHOTS_KEY) || [];
+      let snapshots = await kvGet(ANR_SNAPSHOTS_KEY);
+      if (!Array.isArray(snapshots)) snapshots = [];
+      const dayOfWeek = new Date().getUTCDay();
       const snapshot = {
         date: new Date().toISOString(),
-        type: 'daily',
+        type: dayOfWeek === 1 ? 'weekly' : 'daily',
         data: roster
           .filter(a => a.handle && a.followers != null)
           .map(a => ({ handle: a.handle, followers: a.followers })),
       };
-      const dayOfWeek = new Date().getUTCDay();
-      if (dayOfWeek === 1) snapshot.type = 'weekly';
       snapshots.push(snapshot);
       if (snapshots.length > 120) snapshots.splice(0, snapshots.length - 120);
-      await redis.set(ANR_SNAPSHOTS_KEY, snapshots);
-      console.log(`A&R cron batch ${batchIndex} complete (LAST) — snapshot saved`);
+      await kvSet(ANR_SNAPSHOTS_KEY, snapshots);
+      console.log(`A&R batch ${batchIndex} complete (LAST) — snapshot saved`);
     } else {
-      console.log(`A&R cron batch ${batchIndex} complete — ${results.length} refreshed, ${errors.length} errors`);
+      console.log(`A&R batch ${batchIndex} complete — ${results.length} refreshed, ${errors.length} errors`);
     }
 
     return res.status(200).json({
