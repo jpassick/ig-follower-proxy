@@ -189,14 +189,16 @@
     <div class="top-actions" id="anr-admin-actions">
       <button class="secondary" id="anr-refresh-btn" onclick="anrRefreshAll()">↻ Refresh all</button>
       <button class="secondary" onclick="anrDownloadCSV()">↓ Download CSV</button>
+      <button class="secondary" onclick="anrDownloadPDF()">↓ Download PDF</button>
       <span class="saving" id="anr-saving-indicator">Saving...</span>
     </div>
     <div class="top-actions" id="anr-viewer-actions" style="display:none;">
       <button class="secondary" onclick="anrDownloadCSV()">↓ Download CSV</button>
+      <button class="secondary" onclick="anrDownloadPDF()">↓ Download PDF</button>
     </div>
-    <p class="last-updated" id="anr-last-updated" style="margin-bottom:0.5rem;"></p>
     <div class="progress-bar" id="anr-progress-bar"><div class="progress-bar-fill" id="anr-progress-fill"></div></div>
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
+      <p class="last-updated" id="anr-last-updated" style="margin:0;"></p>
       <div class="period-tabs">
         <span class="period-label">Growth period:</span>
         <button class="period-tab" onclick="setAnrPeriod(1)" id="anr-period-1">24 hours</button>
@@ -418,7 +420,8 @@ function getAnrSnapshotPair() {
   let best=null;
   for(let i=anrSnapshots.length-2;i>=0;i--){
     const t=new Date(anrSnapshots[i].date).getTime();
-    if(t<=cutoff){best=anrSnapshots[i];break;} best=anrSnapshots[i];
+    if(t<=cutoff){best=anrSnapshots[i];break;}
+    best=anrSnapshots[i];
   }
   return{latest,prev:best};
 }
@@ -782,6 +785,18 @@ function downloadPDF(){
   const tableData=sorted.map((r,idx)=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+Number(r._diff).toLocaleString():'—';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'—';return[idx+1,`@${r.handle}`,fmt(r.followers),growth,growthPct];});
   doc.autoTable({startY:34,head:[['#','Handle','Followers','Follower Growth','Follower Growth %']],body:tableData,styles:{fontSize:10,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:12},1:{cellWidth:60},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:40}}});
   doc.save(`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.pdf`);
+}
+
+function anrDownloadPDF(){
+  const{jsPDF}=window.jspdf;const doc=new jsPDF();
+  const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const sorted=getSortedAnrRoster();
+  doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('A&R Prospects Report',14,20);
+  doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(120);
+  doc.text(`Alamo Records / Santa Anna — ${today}`,14,28);doc.setTextColor(0);
+  const tableData=sorted.map((r,idx)=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+Number(r._diff).toLocaleString():'—';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'—';return[idx+1,`@${r.handle}`,fmt(r.followers),growth,growthPct,r.genre||'',r.note||''];});
+  doc.autoTable({startY:34,head:[['#','Handle','Followers','Growth','Growth %','Genre','Notes']],body:tableData,styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:10},1:{cellWidth:50},2:{cellWidth:28},3:{cellWidth:25},4:{cellWidth:25},5:{cellWidth:25},6:{cellWidth:30}}});
+  doc.save(`Alamo-ANR-Report-${getFileDateStr()}.pdf`);
 }
 
 function downloadReportPDF(){
