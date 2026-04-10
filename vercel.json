@@ -19,6 +19,10 @@
     {
       "path": "/api/cron-anr-batch?batch=3",
       "schedule": "45 13 * * *"
+    },
+    {
+      "path": "/api/cron-backup-snapshots",
+      "schedule": "0 4 * * *"
     }
   ],
   "functions": {
@@ -27,6 +31,9 @@
     },
     "api/cron-anr-batch.js": {
       "maxDuration": 800
+    },
+    "api/cron-backup-snapshots.js": {
+      "maxDuration": 30
     },
     "api/followers.js": {
       "maxDuration": 30
