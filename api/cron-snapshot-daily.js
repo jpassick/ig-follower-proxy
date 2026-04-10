@@ -1,5 +1,5 @@
 // api/cron-snapshot-daily.js
-// Runs daily at 10:05am EST (5 15 * * *)
+// Runs daily at 10:00am EST (0 15 * * *)
 
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 const KV_URL = process.env.KV_REST_API_URL;
@@ -85,10 +85,8 @@ export default async function handler(req, res) {
       }
     }
 
-    // Save updated roster
     await kvSet('roster', roster);
 
-    // Save snapshot
     let snapshots = await kvGet('snapshots');
     if (!Array.isArray(snapshots)) snapshots = [];
 
