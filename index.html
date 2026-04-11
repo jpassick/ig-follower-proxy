@@ -441,39 +441,38 @@ function fmtShort(ts) {
 function buildWeekWindows() {
   if (!snapshots.length) { weekWindows = []; currentWeekIdx = -1; return; }
 
-  // Find all unique Monday timestamps covered by our snapshots
-  const mondaySet = new Set();
-  for (const snap of snapshots) {
-    mondaySet.add(getMondayOf(snap.ts));
+  // Find the Monday that starts the first week we have data for
+  const firstTs = snapshots[0].ts;
+  const lastTs = snapshots[snapshots.length - 1].ts;
+  let mondayTs = getMondayOf(firstTs);
+
+  const DAY = 24 * 60 * 60 * 1000;
+  const windows = [];
+
+  while (mondayTs <= lastTs) {
+    const sundayTs = mondayTs + 6 * DAY; // Sunday = Mon + 6 days
+    const sundayEnd = sundayTs + DAY - 1; // end of Sunday
+
+    // Snapshots that fall within this Mon–Sun window
+    const inWeek = snapshots.filter(s => s.ts >= mondayTs && s.ts <= sundayEnd);
+
+    if (inWeek.length) {
+      // startSnap: last snapshot strictly before this Monday (gives the Mon baseline)
+      const before = snapshots.filter(s => s.ts < mondayTs);
+      const startSnap = before.length ? before[before.length - 1]
+                      : inWeek.length > 1 ? inWeek[0]
+                      : null;
+      const endSnap = inWeek[inWeek.length - 1];
+
+      windows.push({ mondayTs, sundayTs, startSnap, endSnap });
+    }
+
+    mondayTs += 7 * DAY; // advance to next Monday
   }
-  const mondays = [...mondaySet].sort((a, b) => a - b);
 
-  weekWindows = mondays.map(mondayTs => {
-    const sundayTs = getSundayOf(mondayTs);
-    // startSnap: earliest snapshot in or before this week (closest to Monday)
-    // endSnap: latest snapshot within this week (closest to Sunday)
-    const inWeek = snapshots.filter(s => {
-      const d = new Date(s.ts);
-      d.setHours(0,0,0,0);
-      return s.ts >= mondayTs && s.ts <= sundayTs + 24*60*60*1000 - 1;
-    });
-    // For weeks with no snapshots on Monday, use the last snapshot before this week as the "prev"
-    const beforeWeek = snapshots.filter(s => s.ts < mondayTs);
-
-    const endSnap = inWeek.length ? inWeek[inWeek.length - 1] : null;
-    // startSnap: prefer last snapshot before the week (gives Mon-start baseline),
-    // fallback to first snapshot in week
-    const startSnap = beforeWeek.length ? beforeWeek[beforeWeek.length - 1]
-                    : inWeek.length > 1 ? inWeek[0]
-                    : null;
-
-    return { mondayTs, sundayTs, startSnap, endSnap };
-  }).filter(w => w.endSnap); // only include weeks we have data for
-
-  // Default to the most recent week
+  weekWindows = windows;
   currentWeekIdx = weekWindows.length - 1;
 }
-
 function stepWeek(dir) {
   const newIdx = currentWeekIdx + dir;
   if (newIdx < 0 || newIdx >= weekWindows.length) return;
@@ -856,11 +855,13 @@ function renderReport(){
   const w = weekWindows[currentWeekIdx];
   const isCurrentWeek = currentWeekIdx === weekWindows.length - 1;
 
-  // Build date label
+  // Build date label — always show Mon–Sun calendar dates
+  const nowTs = Date.now();
+  const weekEndDisplay = w.sundayTs > nowTs ? nowTs : w.sundayTs;
   if (prev) {
-    dateEl.textContent = `${fmtShort(prev.ts)} – ${fmtShort(latest.ts)}`;
+    dateEl.textContent = `${fmtShort(w.mondayTs)} – ${fmtShort(weekEndDisplay)}`;
   } else {
-    dateEl.textContent = fmtShort(latest.ts) + (isCurrentWeek ? ' (current week)' : '');
+    dateEl.textContent = `${fmtShort(w.mondayTs)}${isCurrentWeek ? ' – today' : ''}`;
   }
 
   const sorted=[...latest.data].map(d=>{
@@ -883,7 +884,10 @@ function exportReport(){
   const pair = getWeekSnapshotPair();
   if(!pair || !pair.latest){alert('No data for this week.');return;}
   const { latest, prev } = pair;
-  const label = prev ? `${fmtShort(prev.ts)} – ${fmtShort(latest.ts)}` : fmtShort(latest.ts);
+  const w = weekWindows[currentWeekIdx];
+  const nowTs = Date.now();
+  const weekEndDisplay = w && w.sundayTs > nowTs ? nowTs : w?.sundayTs;
+  const label = w ? `${fmtShort(w.mondayTs)} – ${fmtShort(weekEndDisplay)}` : fmtShort(latest.ts);
   let txt=`Instagram Weekly Report — ${label}\n${'─'.repeat(44)}\n`;
   [...latest.data].sort((a,b)=>b.followers-a.followers).forEach((d,idx)=>{
     const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
@@ -940,7 +944,10 @@ function downloadReportPDF(){
   const pair = getWeekSnapshotPair();
   if(!pair || !pair.latest){alert('No data for this week.');return;}
   const { latest, prev } = pair;
-  const label = prev ? `${fmtShort(prev.ts)} – ${fmtShort(latest.ts)}` : fmtShort(latest.ts);
+  const w = weekWindows[currentWeekIdx];
+  const nowTs = Date.now();
+  const weekEndDisplay = w && w.sundayTs > nowTs ? nowTs : w?.sundayTs;
+  const label = w ? `${fmtShort(w.mondayTs)} – ${fmtShort(weekEndDisplay)}` : fmtShort(latest.ts);
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
   const sorted=[...latest.data].sort((a,b)=>b.followers-a.followers).map(d=>{
     const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
