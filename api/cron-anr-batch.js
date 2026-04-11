@@ -1,10 +1,14 @@
 // api/cron-anr-batch.js
+// Stale-first micro-batching: processes 150 most-stale artists per invocation
+// Runs every 5 minutes 8:00-9:55am EDT via */5 12-13 * * * UTC
+
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 const KV_URL = process.env.KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN;
 const ANR_SNAPSHOTS_KEY = 'anr-snapshots';
 const ANR_LAST_REFRESHED_KEY = 'anr-last-refreshed';
-const BATCH_SIZE = 150; // reduced from 600 — fits within Vercel Pro 300s limit
+const ANR_SNAPSHOT_DATE_KEY = 'anr-last-snapshot-date';
+const BATCH_SIZE = 150;
 
 async function kvGet(key) {
   const r = await fetch(`${KV_URL}/get/${key}`, {
@@ -23,11 +27,15 @@ async function kvGet(key) {
 }
 
 async function kvSet(key, value) {
-  await fetch(`${KV_URL}/set/${key}`, {
+  const r = await fetch(`${KV_URL}/set/${key}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
     body: JSON.stringify([JSON.stringify(value)])
   });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`kvSet failed for key ${key}: ${r.status} ${text}`);
+  }
 }
 
 async function fetchFollowerCount(handle) {
@@ -65,13 +73,14 @@ async function saveFullRoster(roster) {
 
   const existingMeta = await kvGet('anr-roster:meta');
   const existingTotal = existingMeta?.total || 0;
+
   if (roster.length === 0 && existingTotal > 10) {
     const msg = `BLOCKED empty write — existing roster has ${existingTotal} artists`;
     console.error(msg);
     throw new Error(msg);
   }
   if (existingTotal > 100 && roster.length < existingTotal * 0.5) {
-    const msg = `BLOCKED suspicious write — trying to save ${roster.length} artists but ${existingTotal} exist (>50% drop)`;
+    const msg = `BLOCKED suspicious write — trying to save ${roster.length} but ${existingTotal} exist`;
     console.error(msg);
     throw new Error(msg);
   }
@@ -103,8 +112,6 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const batchIndex = parseInt(req.query.batch || '0');
-
   try {
     const roster = await loadFullRoster();
     if (!roster.length) {
@@ -112,44 +119,28 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: 'No A&R prospects in roster' });
     }
 
-    const totalBatches = Math.ceil(roster.length / BATCH_SIZE);
-    const start = batchIndex * BATCH_SIZE;
-    const end = Math.min(start + BATCH_SIZE, roster.length);
-    const batch = roster.slice(start, end);
+    // Stale-first: find artists not yet refreshed today
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const todayTs = todayStart.getTime();
 
-    console.log(`A&R batch ${batchIndex}/${totalBatches - 1}: processing artists ${start}-${end}`);
+    const staleArtists = roster
+      .map((a, i) => ({ ...a, _originalIndex: i }))
+      .filter(a => !a.lastUpdated || a.lastUpdated < todayTs)
+      .sort((a, b) => (a.lastUpdated || 0) - (b.lastUpdated || 0))
+      .slice(0, BATCH_SIZE);
 
-    const now = Date.now();
-    const results = [];
-    const errors = [];
+    // All artists refreshed today — save snapshot if not already done
+    if (staleArtists.length === 0) {
+      const lastSnapshotDate = await kvGet(ANR_SNAPSHOT_DATE_KEY);
+      const todayStr = todayStart.toISOString().split('T')[0];
 
-    for (const artist of batch) {
-      if (!artist.handle || typeof artist.handle !== 'string' || !artist.handle.trim()) {
-        console.warn('Skipping invalid handle:', JSON.stringify(artist));
-        continue;
+      if (lastSnapshotDate === todayStr) {
+        console.log('All artists up to date, snapshot already saved today');
+        return res.status(200).json({ message: 'All artists up to date, snapshot already saved' });
       }
-      try {
-        const { followers, profilePic } = await fetchFollowerCount(artist.handle);
-        artist.followers = followers;
-        if (profilePic) artist.profilePic = profilePic;
-        artist.lastUpdated = now;
-        results.push({ handle: artist.handle, followers });
-        await new Promise(r => setTimeout(r, 1500));
-      } catch (err) {
-        errors.push({ handle: artist.handle, error: err.message });
-        console.error(`Error refreshing A&R ${artist.handle}:`, err.message);
-      }
-    }
 
-    for (let i = start; i < end; i++) {
-      roster[i] = batch[i - start];
-    }
-
-    await saveFullRoster(roster);
-    await kvSet(ANR_LAST_REFRESHED_KEY, now);
-
-    const isLastBatch = batchIndex >= totalBatches - 1;
-    if (isLastBatch) {
+      // Save daily snapshot
       let snapshots = await kvGet(ANR_SNAPSHOTS_KEY);
       if (!Array.isArray(snapshots)) snapshots = [];
       const dayOfWeek = new Date().getUTCDay();
@@ -163,22 +154,52 @@ export default async function handler(req, res) {
       snapshots.push(snapshot);
       if (snapshots.length > 120) snapshots.splice(0, snapshots.length - 120);
       await kvSet(ANR_SNAPSHOTS_KEY, snapshots);
-      console.log(`A&R batch ${batchIndex} complete (LAST) — snapshot saved`);
-    } else {
-      console.log(`A&R batch ${batchIndex} complete — ${results.length} refreshed, ${errors.length} errors`);
+      await kvSet(ANR_SNAPSHOT_DATE_KEY, todayStr);
+      await kvSet(ANR_LAST_REFRESHED_KEY, Date.now());
+      console.log('All artists up to date — snapshot saved');
+      return res.status(200).json({ message: 'All artists up to date, snapshot saved' });
     }
+
+    console.log(`Processing ${staleArtists.length} stale artists (oldest lastUpdated first)`);
+
+    const now = Date.now();
+    const results = [];
+    const errors = [];
+
+    for (const artist of staleArtists) {
+      if (!artist.handle || typeof artist.handle !== 'string' || !artist.handle.trim()) {
+        console.warn('Skipping invalid handle:', JSON.stringify(artist));
+        continue;
+      }
+      try {
+        const { followers, profilePic } = await fetchFollowerCount(artist.handle);
+        roster[artist._originalIndex].followers = followers;
+        if (profilePic) roster[artist._originalIndex].profilePic = profilePic;
+        roster[artist._originalIndex].lastUpdated = now;
+        results.push({ handle: artist.handle, followers });
+        await new Promise(r => setTimeout(r, 1500));
+      } catch (err) {
+        errors.push({ handle: artist.handle, error: err.message });
+        console.error(`Error refreshing A&R ${artist.handle}:`, err.message);
+      }
+    }
+
+    await saveFullRoster(roster);
+    await kvSet(ANR_LAST_REFRESHED_KEY, now);
+
+    const remainingStale = roster.filter(a => !a.lastUpdated || a.lastUpdated < todayTs).length;
+    console.log(`Batch complete — ${results.length} refreshed, ${errors.length} errors, ${remainingStale} still stale`);
 
     return res.status(200).json({
       success: true,
-      batch: batchIndex,
-      totalBatches,
       refreshed: results.length,
       errors,
-      snapshotSaved: isLastBatch,
+      remainingStale,
       timestamp: new Date().toISOString(),
     });
+
   } catch (err) {
-    console.error(`A&R cron batch ${batchIndex} failed:`, err);
+    console.error('A&R cron batch failed:', err);
     return res.status(500).json({ error: err.message });
   }
 }
