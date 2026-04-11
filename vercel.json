@@ -1,23 +1,17 @@
 {
   "crons": [
-    { "path": "/api/cron-anr-batch?batch=0",  "schedule": "0 12 * * *" },
-    { "path": "/api/cron-anr-batch?batch=1",  "schedule": "5 12 * * *" },
-    { "path": "/api/cron-anr-batch?batch=2",  "schedule": "10 12 * * *" },
-    { "path": "/api/cron-anr-batch?batch=3",  "schedule": "15 12 * * *" },
-    { "path": "/api/cron-anr-batch?batch=4",  "schedule": "20 12 * * *" },
-    { "path": "/api/cron-anr-batch?batch=5",  "schedule": "25 12 * * *" },
-    { "path": "/api/cron-anr-batch?batch=6",  "schedule": "30 12 * * *" },
-    { "path": "/api/cron-anr-batch?batch=7",  "schedule": "35 12 * * *" },
-    { "path": "/api/cron-anr-batch?batch=8",  "schedule": "40 12 * * *" },
-    { "path": "/api/cron-anr-batch?batch=9",  "schedule": "45 12 * * *" },
-    { "path": "/api/cron-anr-batch?batch=10", "schedule": "50 12 * * *" },
-    { "path": "/api/cron-anr-batch?batch=11", "schedule": "55 12 * * *" },
-    { "path": "/api/cron-anr-batch?batch=12", "schedule": "0 13 * * *" },
-    { "path": "/api/cron-anr-batch?batch=13", "schedule": "5 13 * * *" },
-    { "path": "/api/cron-anr-batch?batch=14", "schedule": "10 13 * * *" },
-    { "path": "/api/cron-anr-batch?batch=15", "schedule": "15 13 * * *" },
-    { "path": "/api/cron-snapshot-daily",     "schedule": "0 15 * * *" },
-    { "path": "/api/cron-backup-snapshots",   "schedule": "0 4 * * *" }
+    {
+      "path": "/api/cron-anr-batch",
+      "schedule": "*/5 12-13 * * *"
+    },
+    {
+      "path": "/api/cron-snapshot-daily",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron-backup-snapshots",
+      "schedule": "0 4 * * *"
+    }
   ],
   "functions": {
     "api/cron-snapshot-daily.js":   { "maxDuration": 300 },
