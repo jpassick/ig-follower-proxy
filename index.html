@@ -58,7 +58,11 @@
   .report-box { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
   .report-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
   .report-title { font-size: 14px; font-weight: 600; }
-  .report-date { font-size: 12px; color: #888; }
+  .report-date-nav { display: flex; align-items: center; gap: 8px; }
+  .week-nav-btn { background: none; border: 1px solid #ddd; border-radius: 6px; padding: 2px 8px; font-size: 13px; color: #888; cursor: pointer; line-height: 1.4; }
+  .week-nav-btn:hover:not(:disabled) { background: #f0f0f0; color: #1a1a1a; border-color: #bbb; }
+  .week-nav-btn:disabled { opacity: 0.3; cursor: default; background: none; }
+  .report-date { font-size: 12px; color: #888; white-space: nowrap; }
   .report-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .report-table th { text-align: left; font-size: 11px; color: #aaa; font-weight: 500; border-bottom: 1px solid #eee; padding: 5px 0; }
   .report-table td { padding: 8px 0; border-bottom: 1px solid #eee; vertical-align: middle; }
@@ -168,7 +172,11 @@
     <div class="report-box">
       <div class="report-header">
         <div class="report-title">Weekly follower report</div>
-        <div class="report-date" id="report-date"></div>
+        <div class="report-date-nav">
+          <button class="week-nav-btn" id="week-prev-btn" onclick="stepWeek(-1)" title="Previous week">←</button>
+          <div class="report-date" id="report-date"></div>
+          <button class="week-nav-btn" id="week-next-btn" onclick="stepWeek(1)" title="Next week">→</button>
+        </div>
       </div>
       <table class="report-table">
         <thead>
@@ -244,6 +252,10 @@ let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
 
 let anrRoster = [], anrSnapshots = [], anrCurrentSort = { field: 'pct', dir: 'desc' }, anrCurrentPeriod = 7;
 
+// Week navigator state — index into weekWindows array, -1 = not yet computed
+let weekWindows = [];
+let currentWeekIdx = -1;
+
 function saveStarred() { localStorage.setItem(STARRED_KEY, JSON.stringify([...starred])); }
 function toggleStar(handle) {
   if(starred.has(handle)) starred.delete(handle); else starred.add(handle);
@@ -289,7 +301,6 @@ function showApp() {
     document.getElementById('anr-add-row-el').style.display = 'none';
     document.getElementById('anr-csv-row').style.display = 'none';
   }
-  
   loadAll();
   if (isAnr || isAdmin) { loadAnrAll(); }
 }
@@ -309,7 +320,7 @@ async function loadRoster() {
 }
 
 async function loadSnapshots() {
-  try { const res=await fetch('/api/snapshots'); const data=await res.json(); snapshots=data.snapshots||[]; renderRoster(); updateLastUpdated(); }
+  try { const res=await fetch('/api/snapshots'); const data=await res.json(); snapshots=data.snapshots||[]; buildWeekWindows(); renderRoster(); updateLastUpdated(); }
   catch(e) { snapshots=[]; }
 }
 
@@ -336,7 +347,6 @@ async function loadAnrLastRefreshed() {
     } else {
       el.textContent = '';
     }
-    // If A&R tab is currently visible, mirror the timestamp to the header
     if(document.getElementById('view-anr').style.display !== 'none') {
       document.getElementById('last-updated').textContent = el.textContent;
     }
@@ -404,6 +414,74 @@ function setAnrPeriod(days) {
   const el=document.getElementById(map[days]); if(el) el.classList.add('active');
   renderAnrRoster();
 }
+
+// ─── Week Navigator Logic ──────────────────────────────────────────────────
+
+// Returns the Monday (midnight UTC-adjusted) of the week containing a given timestamp
+function getMondayOf(ts) {
+  const d = new Date(ts);
+  // Work in local time
+  const day = d.getDay(); // 0=Sun, 1=Mon ... 6=Sat
+  const diff = (day === 0) ? -6 : 1 - day; // days to subtract to get to Monday
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function getSundayOf(mondayTs) {
+  return mondayTs + 6 * 24 * 60 * 60 * 1000;
+}
+
+function fmtShort(ts) {
+  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Build an array of week windows from available snapshots
+// Each window: { mondayTs, sundayTs, startSnap, endSnap, label }
+function buildWeekWindows() {
+  if (!snapshots.length) { weekWindows = []; currentWeekIdx = -1; return; }
+
+  // Find all unique Monday timestamps covered by our snapshots
+  const mondaySet = new Set();
+  for (const snap of snapshots) {
+    mondaySet.add(getMondayOf(snap.ts));
+  }
+  const mondays = [...mondaySet].sort((a, b) => a - b);
+
+  weekWindows = mondays.map(mondayTs => {
+    const sundayTs = getSundayOf(mondayTs);
+    // startSnap: earliest snapshot in or before this week (closest to Monday)
+    // endSnap: latest snapshot within this week (closest to Sunday)
+    const inWeek = snapshots.filter(s => {
+      const d = new Date(s.ts);
+      d.setHours(0,0,0,0);
+      return s.ts >= mondayTs && s.ts <= sundayTs + 24*60*60*1000 - 1;
+    });
+    // For weeks with no snapshots on Monday, use the last snapshot before this week as the "prev"
+    const beforeWeek = snapshots.filter(s => s.ts < mondayTs);
+
+    const endSnap = inWeek.length ? inWeek[inWeek.length - 1] : null;
+    // startSnap: prefer last snapshot before the week (gives Mon-start baseline),
+    // fallback to first snapshot in week
+    const startSnap = beforeWeek.length ? beforeWeek[beforeWeek.length - 1]
+                    : inWeek.length > 1 ? inWeek[0]
+                    : null;
+
+    return { mondayTs, sundayTs, startSnap, endSnap };
+  }).filter(w => w.endSnap); // only include weeks we have data for
+
+  // Default to the most recent week
+  currentWeekIdx = weekWindows.length - 1;
+}
+
+function stepWeek(dir) {
+  const newIdx = currentWeekIdx + dir;
+  if (newIdx < 0 || newIdx >= weekWindows.length) return;
+  currentWeekIdx = newIdx;
+  renderReport();
+}
+
+// ─── End Week Navigator Logic ──────────────────────────────────────────────
 
 function getSnapshotPair() {
   if(!snapshots.length) return null;
@@ -722,7 +800,10 @@ async function saveSnapshot(silent=false){
   const valid=roster.filter(r=>r.followers!=null);
   if(!valid.length){if(!silent)showErr('No data yet.');return;}
   const snap={date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),ts:Date.now(),data:valid.map(r=>({handle:r.handle,followers:r.followers}))};
-  snapshots.push(snap);await persistSnapshots();renderReport();
+  snapshots.push(snap);
+  buildWeekWindows();
+  await persistSnapshots();
+  renderReport();
   if(!silent)alert('Snapshot saved — '+snap.date);
 }
 
@@ -735,16 +816,60 @@ async function saveAnrSnapshot(silent=false){
   await persistAnrSnapshots();
 }
 
+// Returns the snapshot pair for the currently selected week window
+function getWeekSnapshotPair() {
+  if (!weekWindows.length || currentWeekIdx < 0) return null;
+  const w = weekWindows[currentWeekIdx];
+  return { latest: w.endSnap, prev: w.startSnap };
+}
+
 function renderReport(){
-  const tbody=document.getElementById('report-rows'),dateEl=document.getElementById('report-date');
-  if(!snapshots.length){tbody.innerHTML='<tr><td colspan="5" class="muted" style="font-size:13px;padding:12px 0;">No snapshots yet.</td></tr>';return;}
-  const weekly=snapshots.filter(s=>s.type==='weekly');
-  const latest=snapshots[snapshots.length-1];
-  let prev=null;
-  if(weekly.length>1){prev=weekly[weekly.length-2];}
-  else{const cutoff=latest.ts-(7*24*60*60*1000);const aged=snapshots.slice(0,-1).filter(s=>s.ts<=cutoff);prev=aged.length?aged[aged.length-1]:snapshots[0];}
-  dateEl.textContent=prev?`${prev.date} – ${latest.date}`:latest.date;
-  const sorted=[...latest.data].map(d=>{const pe=prev?prev.data.find(p=>p.handle===d.handle):null;const diff=pe?d.followers-pe.followers:null;const p=pe?pct(d.followers,pe.followers):null;return{...d,_diff:diff,_pct:p};}).sort((a,b)=>(b._diff??-Infinity)-(a._diff??-Infinity));
+  const tbody=document.getElementById('report-rows');
+  const dateEl=document.getElementById('report-date');
+  const prevBtn=document.getElementById('week-prev-btn');
+  const nextBtn=document.getElementById('week-next-btn');
+
+  if(!snapshots.length){
+    tbody.innerHTML='<tr><td colspan="5" class="muted" style="font-size:13px;padding:12px 0;">No snapshots yet.</td></tr>';
+    dateEl.textContent='';
+    if(prevBtn) prevBtn.disabled=true;
+    if(nextBtn) nextBtn.disabled=true;
+    return;
+  }
+
+  // Rebuild week windows if needed
+  if(!weekWindows.length) buildWeekWindows();
+  if(currentWeekIdx < 0) currentWeekIdx = weekWindows.length - 1;
+
+  // Update arrow states
+  if(prevBtn) prevBtn.disabled = currentWeekIdx <= 0;
+  if(nextBtn) nextBtn.disabled = currentWeekIdx >= weekWindows.length - 1;
+
+  const pair = getWeekSnapshotPair();
+  if(!pair || !pair.latest) {
+    tbody.innerHTML='<tr><td colspan="5" class="muted" style="font-size:13px;padding:12px 0;">No data for this week.</td></tr>';
+    dateEl.textContent='';
+    return;
+  }
+
+  const { latest, prev } = pair;
+  const w = weekWindows[currentWeekIdx];
+  const isCurrentWeek = currentWeekIdx === weekWindows.length - 1;
+
+  // Build date label
+  if (prev) {
+    dateEl.textContent = `${fmtShort(prev.ts)} – ${fmtShort(latest.ts)}`;
+  } else {
+    dateEl.textContent = fmtShort(latest.ts) + (isCurrentWeek ? ' (current week)' : '');
+  }
+
+  const sorted=[...latest.data].map(d=>{
+    const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
+    const diff=pe?d.followers-pe.followers:null;
+    const p=pe?pct(d.followers,pe.followers):null;
+    return{...d,_diff:diff,_pct:p};
+  }).sort((a,b)=>(b._diff??-Infinity)-(a._diff??-Infinity));
+
   tbody.innerHTML=sorted.map((d,idx)=>{
     const rEntry=roster.find(r=>r.handle===d.handle);
     const picUrl=rEntry?.profilePic?proxyUrl(rEntry.profilePic):'';
@@ -755,9 +880,18 @@ function renderReport(){
 
 function exportReport(){
   if(!snapshots.length){alert('No snapshot data yet.');return;}
-  const latest=snapshots[snapshots.length-1],prev=snapshots.length>1?snapshots[snapshots.length-2]:null;
-  let txt=`Instagram Weekly Report — ${latest.date}\n${'─'.repeat(44)}\n`;
-  [...latest.data].sort((a,b)=>b.followers-a.followers).forEach((d,idx)=>{const pe=prev?prev.data.find(p=>p.handle===d.handle):null;const p=pe?pct(d.followers,pe.followers):null;const diff=pe?d.followers-pe.followers:null;const ch=diff!==null?` | ${diff>=0?'+':''}${Number(diff).toLocaleString()} (${p!=null?(p>=0?'+':'')+p.toFixed(2)+'%':'—'})`:'  | first entry';txt+=`${idx+1}. @${d.handle}: ${fmt(d.followers)}${ch}\n`;});
+  const pair = getWeekSnapshotPair();
+  if(!pair || !pair.latest){alert('No data for this week.');return;}
+  const { latest, prev } = pair;
+  const label = prev ? `${fmtShort(prev.ts)} – ${fmtShort(latest.ts)}` : fmtShort(latest.ts);
+  let txt=`Instagram Weekly Report — ${label}\n${'─'.repeat(44)}\n`;
+  [...latest.data].sort((a,b)=>b.followers-a.followers).forEach((d,idx)=>{
+    const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
+    const p=pe?pct(d.followers,pe.followers):null;
+    const diff=pe?d.followers-pe.followers:null;
+    const ch=diff!==null?` | ${diff>=0?'+':''}${Number(diff).toLocaleString()} (${p!=null?(p>=0?'+':'')+p.toFixed(2)+'%':'—'})`:'  | first entry';
+    txt+=`${idx+1}. @${d.handle}: ${fmt(d.followers)}${ch}\n`;
+  });
   navigator.clipboard.writeText(txt).then(()=>alert('Copied!')).catch(()=>alert(txt));
 }
 
@@ -803,13 +937,20 @@ function anrDownloadPDF(){
 
 function downloadReportPDF(){
   if(!snapshots.length){alert('No snapshot data yet.');return;}
+  const pair = getWeekSnapshotPair();
+  if(!pair || !pair.latest){alert('No data for this week.');return;}
+  const { latest, prev } = pair;
+  const label = prev ? `${fmtShort(prev.ts)} – ${fmtShort(latest.ts)}` : fmtShort(latest.ts);
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
-  const latest=snapshots[snapshots.length-1],prev=snapshots.length>1?snapshots[snapshots.length-2]:null;
-  const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  const sorted=[...latest.data].sort((a,b)=>b.followers-a.followers).map(d=>{const pe=prev?prev.data.find(p=>p.handle===d.handle):null;const diff=pe?d.followers-pe.followers:null;const p=pe?pct(d.followers,pe.followers):null;return{...d,_diff:diff,_pct:p};});
+  const sorted=[...latest.data].sort((a,b)=>b.followers-a.followers).map(d=>{
+    const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
+    const diff=pe?d.followers-pe.followers:null;
+    const p=pe?pct(d.followers,pe.followers):null;
+    return{...d,_diff:diff,_pct:p};
+  });
   doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('Weekly Follower Report',14,20);
   doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(120);
-  doc.text(`Alamo Records / Santa Anna Roster — ${today}`,14,28);doc.setTextColor(0);
+  doc.text(`Alamo Records / Santa Anna — ${label}`,14,28);doc.setTextColor(0);
   const tableData=sorted.map((r,idx)=>{const growth=r._diff!==null?(r._diff>=0?'+':'')+Number(r._diff).toLocaleString():'—';const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'first entry';return[idx+1,`@${r.handle}`,fmt(r.followers),growth,growthPct];});
   doc.autoTable({startY:36,head:[['#','Handle','Followers','Follower Growth','Follower Growth %']],body:tableData,styles:{fontSize:10,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:12},1:{cellWidth:60},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:40}}});
   doc.save(`Alamo-Weekly-Report-${getFileDateStr()}.pdf`);
