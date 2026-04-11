@@ -34,12 +34,18 @@ export default async function handler(req, res) {
     return Number(n).toLocaleString();
   };
 
-  function formatDate(ts) {
-    return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
+  function formatDate(d) {
+    return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
   }
 
-  // Find snapshot closest to 7 days ago
-  const cutoff = latest.ts - (7 * 24 * 60 * 60 * 1000);
+  // Always use today and 7 days ago for the display date range — never depend on snapshot timestamps
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const dateRange = `${formatDate(sevenDaysAgo)} → ${formatDate(now)}`;
+
+  // Find snapshot closest to 7 days ago for growth comparison
+  const latestTs = latest.ts || Date.now();
+  const cutoff = latestTs - (7 * 24 * 60 * 60 * 1000);
   let prev = null;
   for (let i = snapshots.length - 2; i >= 0; i--) {
     if (snapshots[i].ts <= cutoff) { prev = snapshots[i]; break; }
@@ -52,8 +58,6 @@ export default async function handler(req, res) {
     const pct = pe ? ((d.followers - pe.followers) / pe.followers * 100) : null;
     return { ...d, diff, pct };
   }).sort((a, b) => (b.diff ?? -Infinity) - (a.diff ?? -Infinity));
-
-  const dateRange = prev ? `${formatDate(prev.ts)} → ${formatDate(latest.ts)}` : latest.date;
 
   const rows = withGrowth.map(d => {
     const color = d.diff > 0 ? '#27ae60' : d.diff < 0 ? '#c0392b' : '#888';
