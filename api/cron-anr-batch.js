@@ -1,13 +1,9 @@
 // api/cron-anr-batch.js
-// Stale-first micro-batching: processes 150 most-stale artists per invocation
-// Runs every 5 minutes 8:00-9:55am EDT via */5 12-13 * * * UTC
-
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 const KV_URL = process.env.KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN;
 const ANR_SNAPSHOTS_KEY = 'anr-snapshots';
 const ANR_LAST_REFRESHED_KEY = 'anr-last-refreshed';
-const ANR_SNAPSHOT_DATE_KEY = 'anr-last-snapshot-date';
 const BATCH_SIZE = 150;
 
 async function kvGet(key) {
@@ -80,7 +76,7 @@ async function saveFullRoster(roster) {
     throw new Error(msg);
   }
   if (existingTotal > 100 && roster.length < existingTotal * 0.5) {
-    const msg = `BLOCKED suspicious write — trying to save ${roster.length} but ${existingTotal} exist`;
+    const msg = `BLOCKED suspicious write — trying to save ${roster.length} artists but ${existingTotal} exist (>50% drop)`;
     console.error(msg);
     throw new Error(msg);
   }
@@ -119,28 +115,61 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: 'No A&R prospects in roster' });
     }
 
-    // Stale-first: find artists not yet refreshed today
-    const todayStart = new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
-    const todayTs = todayStart.getTime();
+    const now = Date.now();
+    const TWELVE_HOURS = 12 * 60 * 60 * 1000;
 
-    const staleArtists = roster
-      .map((a, i) => ({ ...a, _originalIndex: i }))
-      .filter(a => !a.lastUpdated || a.lastUpdated < todayTs)
-      .sort((a, b) => (a.lastUpdated || 0) - (b.lastUpdated || 0))
-      .slice(0, BATCH_SIZE);
+    // Identify stale artists
+    const staleArtists = roster.filter(a => !a.lastUpdated || (now - a.lastUpdated > TWELVE_HOURS));
+    const staleCount = staleArtists.length;
 
-    // All artists refreshed today — save snapshot if not already done
-    if (staleArtists.length === 0) {
-      const lastSnapshotDate = await kvGet(ANR_SNAPSHOT_DATE_KEY);
-      const todayStr = todayStart.toISOString().split('T')[0];
+    if (staleCount === 0) {
+      console.log('All artists are up to date for today.');
+      return res.status(200).json({ message: 'All artists already refreshed today.' });
+    }
 
-      if (lastSnapshotDate === todayStr) {
-        console.log('All artists up to date, snapshot already saved today');
-        return res.status(200).json({ message: 'All artists up to date, snapshot already saved' });
+    // Sort all artists oldest-first, take the top BATCH_SIZE
+    const sortedForUpdate = [...roster].sort((a, b) => {
+      const timeA = a.lastUpdated || 0;
+      const timeB = b.lastUpdated || 0;
+      return timeA - timeB;
+    });
+
+    const batch = sortedForUpdate.slice(0, BATCH_SIZE);
+    console.log(`Processing ${batch.length} oldest artists. ${staleCount} total stale remaining.`);
+
+    const results = [];
+    const errors = [];
+
+    for (const artist of batch) {
+      if (!artist.handle || typeof artist.handle !== 'string' || !artist.handle.trim()) {
+        continue;
       }
+      try {
+        const { followers, profilePic } = await fetchFollowerCount(artist.handle);
 
-      // Save daily snapshot
+        // Update in place on the main roster array
+        const target = roster.find(a => a.handle === artist.handle);
+        if (target) {
+          target.followers = followers;
+          if (profilePic) target.profilePic = profilePic;
+          target.lastUpdated = now;
+        }
+
+        results.push({ handle: artist.handle, followers });
+        await new Promise(r => setTimeout(r, 1500));
+      } catch (err) {
+        errors.push({ handle: artist.handle, error: err.message });
+        console.error(`Error refreshing A&R ${artist.handle}:`, err.message);
+      }
+    }
+
+    await saveFullRoster(roster);
+    await kvSet(ANR_LAST_REFRESHED_KEY, now);
+
+    // If stale count at start of this run was <= batch size, this is the final run
+    const isLastBatch = staleCount <= BATCH_SIZE;
+
+    if (isLastBatch) {
       let snapshots = await kvGet(ANR_SNAPSHOTS_KEY);
       if (!Array.isArray(snapshots)) snapshots = [];
       const dayOfWeek = new Date().getUTCDay();
@@ -154,47 +183,17 @@ export default async function handler(req, res) {
       snapshots.push(snapshot);
       if (snapshots.length > 120) snapshots.splice(0, snapshots.length - 120);
       await kvSet(ANR_SNAPSHOTS_KEY, snapshots);
-      await kvSet(ANR_SNAPSHOT_DATE_KEY, todayStr);
-      await kvSet(ANR_LAST_REFRESHED_KEY, Date.now());
-      console.log('All artists up to date — snapshot saved');
-      return res.status(200).json({ message: 'All artists up to date, snapshot saved' });
+      console.log('A&R cycle complete (LAST BATCH) — snapshot saved');
+    } else {
+      console.log(`A&R batch complete — ${results.length} refreshed, ${errors.length} errors.`);
     }
-
-    console.log(`Processing ${staleArtists.length} stale artists (oldest lastUpdated first)`);
-
-    const now = Date.now();
-    const results = [];
-    const errors = [];
-
-    for (const artist of staleArtists) {
-      if (!artist.handle || typeof artist.handle !== 'string' || !artist.handle.trim()) {
-        console.warn('Skipping invalid handle:', JSON.stringify(artist));
-        continue;
-      }
-      try {
-        const { followers, profilePic } = await fetchFollowerCount(artist.handle);
-        roster[artist._originalIndex].followers = followers;
-        if (profilePic) roster[artist._originalIndex].profilePic = profilePic;
-        roster[artist._originalIndex].lastUpdated = now;
-        results.push({ handle: artist.handle, followers });
-        await new Promise(r => setTimeout(r, 1500));
-      } catch (err) {
-        errors.push({ handle: artist.handle, error: err.message });
-        console.error(`Error refreshing A&R ${artist.handle}:`, err.message);
-      }
-    }
-
-    await saveFullRoster(roster);
-    await kvSet(ANR_LAST_REFRESHED_KEY, now);
-
-    const remainingStale = roster.filter(a => !a.lastUpdated || a.lastUpdated < todayTs).length;
-    console.log(`Batch complete — ${results.length} refreshed, ${errors.length} errors, ${remainingStale} still stale`);
 
     return res.status(200).json({
       success: true,
       refreshed: results.length,
       errors,
-      remainingStale,
+      snapshotSaved: isLastBatch,
+      remainingStale: Math.max(0, staleCount - batch.length),
       timestamp: new Date().toISOString(),
     });
 
