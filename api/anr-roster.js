@@ -21,11 +21,15 @@ async function kvGet(key) {
 }
 
 async function kvSet(key, value) {
-  await fetch(`${KV_URL}/set/${key}`, {
+  const r = await fetch(`${KV_URL}/set/${key}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
     body: JSON.stringify([JSON.stringify(value)])
   });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`kvSet failed for key ${key}: ${r.status} ${text}`);
+  }
 }
 
 async function kvDel(key) {
@@ -49,7 +53,6 @@ export default async function handler(req, res) {
           .filter(Boolean);
         return res.status(200).json({ roster });
       }
-      // fallback to old single key
       const roster = await kvGet(ANR_KEY) || [];
       return res.status(200).json({ roster });
     } catch (e) {
@@ -59,18 +62,21 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     try {
-      const { roster } = req.body;
+      const { roster, overrideSafetyGuard } = req.body;
       if (!Array.isArray(roster)) {
         return res.status(400).json({ error: 'roster must be an array' });
       }
 
-      // SAFETY GUARD: never overwrite with empty or suspiciously small roster
-      // unless it's a deliberate small roster (under 10 artists treat as intentional)
-      const existingMeta = await kvGet(`${ANR_KEY}:meta`);
-      const existingTotal = existingMeta?.total || 0;
-      if (roster.length === 0 && existingTotal > 10) {
-        console.error(`BLOCKED empty write — existing roster has ${existingTotal} artists`);
-        return res.status(400).json({ error: `Blocked: attempt to overwrite ${existingTotal} artists with empty array` });
+      // Safety guard — block suspicious writes unless explicitly overridden
+      if (!overrideSafetyGuard) {
+        const existingMeta = await kvGet(`${ANR_KEY}:meta`);
+        const existingTotal = existingMeta?.total || 0;
+        if (roster.length === 0 && existingTotal > 10) {
+          return res.status(400).json({ error: `Blocked: attempt to overwrite ${existingTotal} artists with empty array. Pass overrideSafetyGuard: true to force.` });
+        }
+        if (existingTotal > 100 && roster.length < existingTotal * 0.5) {
+          return res.status(400).json({ error: `Blocked: attempt to drop from ${existingTotal} to ${roster.length} artists (>50% drop). Pass overrideSafetyGuard: true to force.` });
+        }
       }
 
       const chunks = [];
@@ -78,7 +84,7 @@ export default async function handler(req, res) {
         chunks.push(roster.slice(i, i + CHUNK_SIZE));
       }
 
-      // Delete stale old chunks
+      const existingMeta = await kvGet(`${ANR_KEY}:meta`);
       if (existingMeta && existingMeta.chunks > chunks.length) {
         await Promise.all(
           Array.from(
@@ -88,7 +94,6 @@ export default async function handler(req, res) {
         );
       }
 
-      // Write all chunks first, then update meta
       await Promise.all(
         chunks.map((chunk, i) => kvSet(`${ANR_KEY}:chunk:${i}`, chunk))
       );
