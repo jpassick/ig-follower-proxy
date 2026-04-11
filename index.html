@@ -289,9 +289,7 @@ function showApp() {
     document.getElementById('anr-add-row-el').style.display = 'none';
     document.getElementById('anr-csv-row').style.display = 'none';
   }
-  if (!isAnr && !isAdmin) {
-    document.querySelector('button[onclick="switchTab(\'anr\')"]').style.display = 'none';
-  }
+  
   loadAll();
   if (isAnr || isAdmin) { loadAnrAll(); }
 }
@@ -337,6 +335,10 @@ async function loadAnrLastRefreshed() {
       el.textContent = `Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
     } else {
       el.textContent = '';
+    }
+    // If A&R tab is currently visible, mirror the timestamp to the header
+    if(document.getElementById('view-anr').style.display !== 'none') {
+      document.getElementById('last-updated').textContent = el.textContent;
     }
   } catch(e) {}
 }
@@ -825,9 +827,20 @@ function switchTab(tab){
   document.getElementById('view-live').style.display=tab==='live'?'':'none';
   document.getElementById('view-report').style.display=tab==='report'?'':'none';
   document.getElementById('view-anr').style.display=tab==='anr'?'':'none';
-  document.getElementById('last-updated').style.display=tab==='anr'?'none':''; // hide main timestamp on A&R tab
+  if(tab==='anr'){
+    const anrTs=document.getElementById('anr-last-updated').textContent;
+    document.getElementById('last-updated').textContent=anrTs||'';
+    document.getElementById('last-updated').style.display='';
+    if(!isAdmin&&!isAnr){
+      document.getElementById('view-anr').innerHTML=`<div style="margin-top:3rem;text-align:center;color:#aaa;font-size:14px;">🔒 A&R access is restricted.<br><span style="font-size:12px;margin-top:6px;display:block;">Contact your admin for access.</span></div>`;
+    } else {
+      loadAnrLastRefreshed();
+      if(!anrRoster.length) loadAnrAll();
+    }
+  } else {
+    updateLastUpdated();
+  }
   if(tab==='report') renderReport();
-  if(tab==='anr' && !anrRoster.length) loadAnrAll();
 }
  
 document.getElementById('add-input').addEventListener('keydown',e=>{if(e.key==='Enter')addHandle();});
