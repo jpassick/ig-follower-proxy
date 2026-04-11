@@ -90,12 +90,13 @@ export default async function handler(req, res) {
     if (!Array.isArray(snapshots)) snapshots = [];
     const dayOfWeek = new Date().getUTCDay();
     const snapshot = {
-      date: new Date().toISOString(),
-      type: dayOfWeek === 1 ? 'weekly' : 'daily',
-      data: roster
-        .filter(a => a.handle && a.followers != null)
-        .map(a => ({ handle: a.handle, followers: a.followers })),
-    };
+  date: new Date().toISOString(),
+  ts: Date.now(),
+  type: dayOfWeek === 1 ? 'weekly' : 'daily',
+  data: roster
+    .filter(a => a.handle && a.followers != null)
+    .map(a => ({ handle: a.handle, followers: a.followers })),
+};
     snapshots.push(snapshot);
     if (snapshots.length > 120) snapshots.splice(0, snapshots.length - 120);
     await kvSet('snapshots', snapshots);
