@@ -262,6 +262,7 @@ function toggleStar(handle) {
   saveStarred(); renderRoster();
 }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function snapTs(s) { return s.ts || new Date(s.date).getTime(); }
 function proxyUrl(url) { if(!url) return ''; return `/api/proxy-image?url=${encodeURIComponent(url)}`; }
 
 async function checkPassword() {
@@ -442,8 +443,8 @@ function buildWeekWindows() {
   if (!snapshots.length) { weekWindows = []; currentWeekIdx = -1; return; }
 
   // Find the Monday that starts the first week we have data for
-  const firstTs = snapshots[0].ts;
-  const lastTs = snapshots[snapshots.length - 1].ts;
+  const firstTs = snapTs(snapshots[0]);
+  const lastTs = snapTs(snapshots[snapshots.length - 1]);
   let mondayTs = getMondayOf(firstTs);
 
   const DAY = 24 * 60 * 60 * 1000;
@@ -454,11 +455,11 @@ function buildWeekWindows() {
     const sundayEnd = sundayTs + DAY - 1; // end of Sunday
 
     // Snapshots that fall within this Mon–Sun window
-    const inWeek = snapshots.filter(s => s.ts >= mondayTs && s.ts <= sundayEnd);
+    const inWeek = snapshots.filter(s => snapTs(s) >= mondayTs && snapTs(s) <= sundayEnd);
 
     if (inWeek.length) {
       // startSnap: last snapshot strictly before this Monday (gives the Mon baseline)
-      const before = snapshots.filter(s => s.ts < mondayTs);
+      const before = snapshots.filter(s => snapTs(s) < mondayTs);
       const startSnap = before.length ? before[before.length - 1]
                       : inWeek.length > 1 ? inWeek[0]
                       : null;
@@ -482,14 +483,21 @@ function stepWeek(dir) {
 
 // ─── End Week Navigator Logic ──────────────────────────────────────────────
 
-function getSnapshotPair() {
+function getSnapVal(handle){
   if(!snapshots.length) return null;
   const latest=snapshots[snapshots.length-1];
-  const cutoff=latest.ts-(currentPeriod*24*60*60*1000);
-  let best=null;
-  for(let i=snapshots.length-2;i>=0;i--){if(snapshots[i].ts<=cutoff){best=snapshots[i];break;}}
-  if(!best&&snapshots.length>1)best=snapshots[0];
-  return{latest,prev:best};
+  const cutoff=snapTs(latest)-(currentPeriod*24*60*60*1000);
+  let prev=null;
+  for(let i=snapshots.length-2;i>=0;i--){
+    const snap=snapshots[i];
+    const entry=snap.data.find(d=>d.handle===handle);
+    if(!entry) continue;
+    if(snapTs(snap)<=cutoff){prev=snap;break;}
+    prev=snap;
+  }
+  if(!prev) return null;
+  const e=prev.data.find(d=>d.handle===handle);
+  return e?e.followers:null;
 }
 
 function getAnrSnapshotPair() {
@@ -510,18 +518,6 @@ function pct(cur,prev){if(!prev)return null;return(cur-prev)/prev*100;}
 function renderPct(p){if(p===null)return '<span class="muted">—</span>';const sign=p>0?'+':'',cls=p>0?'up':p<0?'down':'muted',arrow=p>0?'▲':p<0?'▼':'–';return `<span class="${cls}">${arrow} ${sign}${p.toFixed(2)}%</span>`;}
 function renderGrowth(diff){if(diff===null)return '<span class="muted">—</span>';const cls=diff>0?'up':diff<0?'down':'muted',sign=diff>0?'+':'';return `<span class="${cls}">${sign}${Number(diff).toLocaleString()}</span>`;}
 
-function getSnapVal(handle){
-  if(!snapshots.length) return null;
-  const latest=snapshots[snapshots.length-1];
-  const cutoff=latest.ts-(currentPeriod*24*60*60*1000);
-  let prev=null;
-  for(let i=snapshots.length-2;i>=0;i--){
-    const snap=snapshots[i];
-    const entry=snap.data.find(d=>d.handle===handle);
-    if(!entry) continue;
-    if(snap.ts<=cutoff){prev=snap;break;}
-    prev=snap;
-  }
   if(!prev) return null;
   const e=prev.data.find(d=>d.handle===handle);
   return e?e.followers:null;
