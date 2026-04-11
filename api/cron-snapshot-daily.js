@@ -1,6 +1,4 @@
 // api/cron-snapshot-daily.js
-// Runs daily at 10:00am EST (0 15 * * *)
-
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 const KV_URL = process.env.KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN;
@@ -22,11 +20,15 @@ async function kvGet(key) {
 }
 
 async function kvSet(key, value) {
-  await fetch(`${KV_URL}/set/${key}`, {
+  const r = await fetch(`${KV_URL}/set/${key}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
     body: JSON.stringify([JSON.stringify(value)])
   });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`kvSet failed for key ${key}: ${r.status} ${text}`);
+  }
 }
 
 async function fetchFollowerCount(handle) {
@@ -52,16 +54,13 @@ export default async function handler(req, res) {
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-
   try {
     const roster = await kvGet('roster');
     if (!Array.isArray(roster) || roster.length === 0) {
       console.log('No artists in roster or failed to load roster');
       return res.status(200).json({ message: 'No artists in roster' });
     }
-
     console.log(`Starting daily cron for ${roster.length} artists`);
-
     const now = Date.now();
     const results = [];
     const errors = [];
@@ -89,7 +88,6 @@ export default async function handler(req, res) {
 
     let snapshots = await kvGet('snapshots');
     if (!Array.isArray(snapshots)) snapshots = [];
-
     const dayOfWeek = new Date().getUTCDay();
     const snapshot = {
       date: new Date().toISOString(),
@@ -98,7 +96,6 @@ export default async function handler(req, res) {
         .filter(a => a.handle && a.followers != null)
         .map(a => ({ handle: a.handle, followers: a.followers })),
     };
-
     snapshots.push(snapshot);
     if (snapshots.length > 120) snapshots.splice(0, snapshots.length - 120);
     await kvSet('snapshots', snapshots);
