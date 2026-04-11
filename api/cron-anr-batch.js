@@ -4,7 +4,7 @@ const KV_URL = process.env.KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN;
 const ANR_SNAPSHOTS_KEY = 'anr-snapshots';
 const ANR_LAST_REFRESHED_KEY = 'anr-last-refreshed';
-const BATCH_SIZE = 600;
+const BATCH_SIZE = 150; // reduced from 600 — fits within Vercel Pro 300s limit
 
 async function kvGet(key) {
   const r = await fetch(`${KV_URL}/get/${key}`, {
@@ -63,7 +63,6 @@ async function loadFullRoster() {
 async function saveFullRoster(roster) {
   const CHUNK_SIZE = 500;
 
-  // SAFETY GUARD: never write fewer artists than what's already stored
   const existingMeta = await kvGet('anr-roster:meta');
   const existingTotal = existingMeta?.total || 0;
   if (roster.length === 0 && existingTotal > 10) {
@@ -71,7 +70,6 @@ async function saveFullRoster(roster) {
     console.error(msg);
     throw new Error(msg);
   }
-  // Also block suspiciously large drops (e.g. a batch load failure returning partial data)
   if (existingTotal > 100 && roster.length < existingTotal * 0.5) {
     const msg = `BLOCKED suspicious write — trying to save ${roster.length} artists but ${existingTotal} exist (>50% drop)`;
     console.error(msg);
@@ -83,7 +81,6 @@ async function saveFullRoster(roster) {
     chunks.push(roster.slice(i, i + CHUNK_SIZE));
   }
 
-  // Delete any old extra chunks
   if (existingMeta && existingMeta.chunks > chunks.length) {
     await Promise.all(
       Array.from({ length: existingMeta.chunks - chunks.length }, (_, i) =>
@@ -144,7 +141,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // Write updated batch back into full roster
     for (let i = start; i < end; i++) {
       roster[i] = batch[i - start];
     }
