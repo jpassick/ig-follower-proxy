@@ -1,20 +1,47 @@
-import { Redis } from '@upstash/redis';
-
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
-
+// api/anr-roster.js
+const KV_URL = process.env.KV_REST_API_URL;
+const KV_TOKEN = process.env.KV_REST_API_TOKEN;
 const ANR_KEY = 'anr-roster';
 const CHUNK_SIZE = 500;
+
+async function kvGet(key) {
+  const r = await fetch(`${KV_URL}/get/${key}`, {
+    headers: { Authorization: `Bearer ${KV_TOKEN}` }
+  });
+  const data = await r.json();
+  if (!data.result) return null;
+  let val = data.result;
+  while (typeof val === 'string') {
+    try { val = JSON.parse(val); } catch(e) { break; }
+  }
+  if (Array.isArray(val) && val.length === 1 && typeof val[0] === 'string') {
+    try { val = JSON.parse(val[0]); } catch(e) {}
+  }
+  return val;
+}
+
+async function kvSet(key, value) {
+  await fetch(`${KV_URL}/set/${key}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify([JSON.stringify(value)])
+  });
+}
+
+async function kvDel(key) {
+  await fetch(`${KV_URL}/del/${key}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${KV_TOKEN}` }
+  });
+}
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const meta = await redis.get(`${ANR_KEY}:meta`);
+      const meta = await kvGet(`${ANR_KEY}:meta`);
       if (meta && meta.chunks) {
         const chunks = await Promise.all(
-          Array.from({ length: meta.chunks }, (_, i) => redis.get(`${ANR_KEY}:chunk:${i}`))
+          Array.from({ length: meta.chunks }, (_, i) => kvGet(`${ANR_KEY}:chunk:${i}`))
         );
         const roster = chunks
           .map(c => (Array.isArray(c) ? c : []))
@@ -23,7 +50,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ roster });
       }
       // fallback to old single key
-      const roster = await redis.get(ANR_KEY) || [];
+      const roster = await kvGet(ANR_KEY) || [];
       return res.status(200).json({ roster });
     } catch (e) {
       return res.status(500).json({ error: e.message });
@@ -37,29 +64,40 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'roster must be an array' });
       }
 
+      // SAFETY GUARD: never overwrite with empty or suspiciously small roster
+      // unless it's a deliberate small roster (under 10 artists treat as intentional)
+      const existingMeta = await kvGet(`${ANR_KEY}:meta`);
+      const existingTotal = existingMeta?.total || 0;
+      if (roster.length === 0 && existingTotal > 10) {
+        console.error(`BLOCKED empty write — existing roster has ${existingTotal} artists`);
+        return res.status(400).json({ error: `Blocked: attempt to overwrite ${existingTotal} artists with empty array` });
+      }
+
       const chunks = [];
       for (let i = 0; i < roster.length; i += CHUNK_SIZE) {
         chunks.push(roster.slice(i, i + CHUNK_SIZE));
       }
 
-      // Delete any old chunks that may now be stale (e.g. roster shrank)
-      const oldMeta = await redis.get(`${ANR_KEY}:meta`);
-      if (oldMeta && oldMeta.chunks > chunks.length) {
-        const deleteKeys = Array.from(
-          { length: oldMeta.chunks - chunks.length },
-          (_, i) => `${ANR_KEY}:chunk:${chunks.length + i}`
+      // Delete stale old chunks
+      if (existingMeta && existingMeta.chunks > chunks.length) {
+        await Promise.all(
+          Array.from(
+            { length: existingMeta.chunks - chunks.length },
+            (_, i) => kvDel(`${ANR_KEY}:chunk:${chunks.length + i}`)
+          )
         );
-        await Promise.all(deleteKeys.map(k => redis.del(k)));
       }
 
       // Write all chunks first, then update meta
       await Promise.all(
-        chunks.map((chunk, i) => redis.set(`${ANR_KEY}:chunk:${i}`, chunk))
+        chunks.map((chunk, i) => kvSet(`${ANR_KEY}:chunk:${i}`, chunk))
       );
-      await redis.set(`${ANR_KEY}:meta`, { chunks: chunks.length, total: roster.length });
+      await kvSet(`${ANR_KEY}:meta`, { chunks: chunks.length, total: roster.length });
 
-      return res.status(200).json({ ok: true });
+      console.log(`A&R roster saved: ${roster.length} artists in ${chunks.length} chunks`);
+      return res.status(200).json({ ok: true, total: roster.length, chunks: chunks.length });
     } catch (e) {
+      console.error('anr-roster POST error:', e);
       return res.status(500).json({ error: e.message });
     }
   }
