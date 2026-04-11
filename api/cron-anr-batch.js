@@ -137,7 +137,7 @@ export default async function handler(req, res) {
         if (profilePic) artist.profilePic = profilePic;
         artist.lastUpdated = now;
         results.push({ handle: artist.handle, followers });
-        await new Promise(r => setTimeout(r, 1100));
+        await new Promise(r => setTimeout(r, 1500));
       } catch (err) {
         errors.push({ handle: artist.handle, error: err.message });
         console.error(`Error refreshing A&R ${artist.handle}:`, err.message);
