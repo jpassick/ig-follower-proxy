@@ -1,6 +1,4 @@
 // api/cron-anr-batch.js
-// Called by each batch cron with a batchIndex parameter
-
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 const KV_URL = process.env.KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN;
@@ -51,7 +49,6 @@ async function fetchFollowerCount(handle) {
 }
 
 async function loadFullRoster() {
-  // Try chunked storage first
   const meta = await kvGet('anr-roster:meta');
   if (meta && meta.chunks) {
     const chunks = await Promise.all(
@@ -59,23 +56,37 @@ async function loadFullRoster() {
     );
     return chunks.map(c => (Array.isArray(c) ? c : [])).flat().filter(Boolean);
   }
-  // Fall back to single key
   const roster = await kvGet('anr-roster');
   return Array.isArray(roster) ? roster : [];
 }
 
 async function saveFullRoster(roster) {
   const CHUNK_SIZE = 500;
+
+  // SAFETY GUARD: never write fewer artists than what's already stored
+  const existingMeta = await kvGet('anr-roster:meta');
+  const existingTotal = existingMeta?.total || 0;
+  if (roster.length === 0 && existingTotal > 10) {
+    const msg = `BLOCKED empty write — existing roster has ${existingTotal} artists`;
+    console.error(msg);
+    throw new Error(msg);
+  }
+  // Also block suspiciously large drops (e.g. a batch load failure returning partial data)
+  if (existingTotal > 100 && roster.length < existingTotal * 0.5) {
+    const msg = `BLOCKED suspicious write — trying to save ${roster.length} artists but ${existingTotal} exist (>50% drop)`;
+    console.error(msg);
+    throw new Error(msg);
+  }
+
   const chunks = [];
   for (let i = 0; i < roster.length; i += CHUNK_SIZE) {
     chunks.push(roster.slice(i, i + CHUNK_SIZE));
   }
 
   // Delete any old extra chunks
-  const oldMeta = await kvGet('anr-roster:meta');
-  if (oldMeta && oldMeta.chunks > chunks.length) {
+  if (existingMeta && existingMeta.chunks > chunks.length) {
     await Promise.all(
-      Array.from({ length: oldMeta.chunks - chunks.length }, (_, i) =>
+      Array.from({ length: existingMeta.chunks - chunks.length }, (_, i) =>
         fetch(`${KV_URL}/del/anr-roster:chunk:${chunks.length + i}`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${KV_TOKEN}` }
@@ -86,6 +97,7 @@ async function saveFullRoster(roster) {
 
   await Promise.all(chunks.map((chunk, i) => kvSet(`anr-roster:chunk:${i}`, chunk)));
   await kvSet('anr-roster:meta', { chunks: chunks.length, total: roster.length });
+  console.log(`saveFullRoster: wrote ${roster.length} artists in ${chunks.length} chunks`);
 }
 
 export default async function handler(req, res) {
@@ -140,7 +152,6 @@ export default async function handler(req, res) {
     await saveFullRoster(roster);
     await kvSet(ANR_LAST_REFRESHED_KEY, now);
 
-    // If this is the last batch, save a snapshot
     const isLastBatch = batchIndex >= totalBatches - 1;
     if (isLastBatch) {
       let snapshots = await kvGet(ANR_SNAPSHOTS_KEY);
