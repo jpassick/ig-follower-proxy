@@ -252,7 +252,6 @@ let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
 
 let anrRoster = [], anrSnapshots = [], anrCurrentSort = { field: 'pct', dir: 'desc' }, anrCurrentPeriod = 7;
 
-// Week navigator state — index into weekWindows array, -1 = not yet computed
 let weekWindows = [];
 let currentWeekIdx = -1;
 
@@ -359,6 +358,26 @@ async function loadAnrLastRefreshed() {
 }
 
 function updateLastUpdated() {
+  const el=document.getElementById('last-updated');
+  const timestamps=roster.filter(r=>r.updatedAt).map(r=>Number(r.updatedAt)).filter(t=>!isNaN(t));
+  if(timestamps.length){
+    const d=new Date(Math.max(...timestamps));
+    if(!isNaN(d.getTime())){
+      el.textContent=`Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
+      return;
+    }
+  }
+  if(snapshots.length){
+    const lastSnap=snapshots[snapshots.length-1];
+    const ts=lastSnap.ts||new Date(lastSnap.date).getTime();
+    const d=new Date(ts);
+    if(!isNaN(d.getTime())){
+      el.textContent=`Last snapshot: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
+      return;
+    }
+  }
+  el.textContent='';
+}
 
 async function persistRoster() {
   const ind=document.getElementById('saving-indicator'); ind.style.display='inline';
@@ -406,14 +425,10 @@ function setAnrPeriod(days) {
   renderAnrRoster();
 }
 
-// ─── Week Navigator Logic ──────────────────────────────────────────────────
-
-// Returns the Monday (midnight UTC-adjusted) of the week containing a given timestamp
 function getMondayOf(ts) {
   const d = new Date(ts);
-  // Work in local time
-  const day = d.getDay(); // 0=Sun, 1=Mon ... 6=Sat
-  const diff = (day === 0) ? -6 : 1 - day; // days to subtract to get to Monday
+  const day = d.getDay();
+  const diff = (day === 0) ? -6 : 1 - day;
   d.setDate(d.getDate() + diff);
   d.setHours(0, 0, 0, 0);
   return d.getTime();
@@ -427,51 +442,37 @@ function fmtShort(ts) {
   return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// Build an array of week windows from available snapshots
-// Each window: { mondayTs, sundayTs, startSnap, endSnap, label }
 function buildWeekWindows() {
   if (!snapshots.length) { weekWindows = []; currentWeekIdx = -1; return; }
-
-  // Find the Monday that starts the first week we have data for
   const firstTs = snapTs(snapshots[0]);
   const lastTs = snapTs(snapshots[snapshots.length - 1]);
   let mondayTs = getMondayOf(firstTs);
-
   const DAY = 24 * 60 * 60 * 1000;
   const windows = [];
-
   while (mondayTs <= lastTs) {
-    const sundayTs = mondayTs + 6 * DAY; // Sunday = Mon + 6 days
-    const sundayEnd = sundayTs + DAY - 1; // end of Sunday
-
-    // Snapshots that fall within this Mon–Sun window
+    const sundayTs = mondayTs + 6 * DAY;
+    const sundayEnd = sundayTs + DAY - 1;
     const inWeek = snapshots.filter(s => snapTs(s) >= mondayTs && snapTs(s) <= sundayEnd);
-
     if (inWeek.length) {
-      // startSnap: last snapshot strictly before this Monday (gives the Mon baseline)
       const before = snapshots.filter(s => snapTs(s) < mondayTs);
       const startSnap = before.length ? before[before.length - 1]
                       : inWeek.length > 1 ? inWeek[0]
                       : null;
       const endSnap = inWeek[inWeek.length - 1];
-
       windows.push({ mondayTs, sundayTs, startSnap, endSnap });
     }
-
-    mondayTs += 7 * DAY; // advance to next Monday
+    mondayTs += 7 * DAY;
   }
-
   weekWindows = windows;
   currentWeekIdx = weekWindows.length - 1;
 }
+
 function stepWeek(dir) {
   const newIdx = currentWeekIdx + dir;
   if (newIdx < 0 || newIdx >= weekWindows.length) return;
   currentWeekIdx = newIdx;
   renderReport();
 }
-
-// ─── End Week Navigator Logic ──────────────────────────────────────────────
 
 function getSnapVal(handle){
   if(!snapshots.length) return null;
@@ -796,7 +797,6 @@ async function saveAnrSnapshot(silent=false){
   await persistAnrSnapshots();
 }
 
-// Returns the snapshot pair for the currently selected week window
 function getWeekSnapshotPair() {
   if (!weekWindows.length || currentWeekIdx < 0) return null;
   const w = weekWindows[currentWeekIdx];
@@ -817,11 +817,9 @@ function renderReport(){
     return;
   }
 
-  // Rebuild week windows if needed
   if(!weekWindows.length) buildWeekWindows();
   if(currentWeekIdx < 0) currentWeekIdx = weekWindows.length - 1;
 
-  // Update arrow states
   if(prevBtn) prevBtn.disabled = currentWeekIdx <= 0;
   if(nextBtn) nextBtn.disabled = currentWeekIdx >= weekWindows.length - 1;
 
@@ -835,8 +833,6 @@ function renderReport(){
   const { latest, prev } = pair;
   const w = weekWindows[currentWeekIdx];
   const isCurrentWeek = currentWeekIdx === weekWindows.length - 1;
-
-  // Build date label — always show Mon–Sun calendar dates
   const nowTs = Date.now();
   const weekEndDisplay = w.sundayTs > nowTs ? nowTs : w.sundayTs;
   if (prev) {
@@ -971,7 +967,7 @@ function switchTab(tab){
   }
   if(tab==='report') renderReport();
 }
- 
+
 document.getElementById('add-input').addEventListener('keydown',e=>{if(e.key==='Enter')addHandle();});
 </script>
 </body>
