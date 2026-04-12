@@ -344,7 +344,11 @@ async function loadAnrLastRefreshed() {
     const el = document.getElementById('anr-last-updated');
     if (data.lastRefreshed) {
       const d = new Date(data.lastRefreshed);
-      el.textContent = `Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
+      if (!isNaN(d.getTime())) {
+        el.textContent = `Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
+      } else {
+        el.textContent = '';
+      }
     } else {
       el.textContent = '';
     }
@@ -355,20 +359,6 @@ async function loadAnrLastRefreshed() {
 }
 
 function updateLastUpdated() {
-  const el=document.getElementById('last-updated');
-  const timestamps=roster.filter(r=>r.updatedAt).map(r=>r.updatedAt);
-  if(timestamps.length){
-    const d=new Date(Math.max(...timestamps));
-    el.textContent=`Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
-    return;
-  }
-  if(snapshots.length){
-    const d=new Date(snapshots[snapshots.length-1].ts);
-    el.textContent=`Last snapshot: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
-    return;
-  }
-  el.textContent='';
-}
 
 async function persistRoster() {
   const ind=document.getElementById('saving-indicator'); ind.style.display='inline';
