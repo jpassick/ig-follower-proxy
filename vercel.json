@@ -1,29 +1,13 @@
 {
   "crons": [
-    {
-      "path": "/api/cron-anr-batch?batch=0",
-      "schedule": "0 13 * * *"
-    },
-    {
-      "path": "/api/cron-anr-batch?batch=1",
-      "schedule": "15 13 * * *"
-    },
-    {
-      "path": "/api/cron-anr-batch?batch=2",
-      "schedule": "30 13 * * *"
-    },
-    {
-      "path": "/api/cron-anr-batch?batch=3",
-      "schedule": "45 13 * * *"
-    },
-    {
-      "path": "/api/cron-snapshot-daily",
-      "schedule": "0 15 * * *"
-    },
-    {
-      "path": "/api/cron-backup-snapshots",
-      "schedule": "0 4 * * *"
-    }
+    { "path": "/api/cron-anr-batch", "schedule": "0 13 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "11 13 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "22 13 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "33 13 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "44 13 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "55 13 * * *" },
+    { "path": "/api/cron-snapshot-daily", "schedule": "0 15 * * *" },
+    { "path": "/api/cron-backup-snapshots", "schedule": "0 4 * * *" }
   ],
   "functions": {
     "api/cron-snapshot-daily.js":   { "maxDuration": 300 },
