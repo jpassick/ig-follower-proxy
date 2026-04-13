@@ -4,7 +4,7 @@ const KV_URL = process.env.KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN;
 const ANR_SNAPSHOTS_KEY = 'anr-snapshots';
 const ANR_LAST_REFRESHED_KEY = 'anr-last-refreshed';
-const BATCH_SIZE = 400;
+const BATCH_SIZE = 150;
 
 async function kvGet(key) {
   const r = await fetch(`${KV_URL}/get/${key}`, {
@@ -156,11 +156,11 @@ export default async function handler(req, res) {
         }
 
         results.push({ handle: artist.handle, followers });
-        await new Promise(r => setTimeout(r, 1500));
       } catch (err) {
         errors.push({ handle: artist.handle, error: err.message });
         console.error(`Error refreshing A&R ${artist.handle}:`, err.message);
       }
+      await new Promise(r => setTimeout(r, 1500));
     }
 
     await saveFullRoster(roster);
