@@ -180,7 +180,7 @@ export default async function handler(req, res) {
           .map(a => ({ handle: a.handle, followers: a.followers })),
       };
       snapshots.push(snapshot);
-      if (snapshots.length > 120) snapshots.splice(0, snapshots.length - 120);
+      if(snapshots.length>1095) snapshots.splice(0,snapshots.length-1095);
       await kvSet(ANR_SNAPSHOTS_KEY, snapshots);
       console.log('A&R cycle complete (LAST BATCH) — snapshot saved');
     } else {
