@@ -283,9 +283,12 @@ let weekWindows = [], currentWeekIdx = -1;
 // { type: 'preset', key, label, startTs, endTs }
 // { type: 'single', label, ts }      ← single day click
 // { type: 'range',  label, startTs, endTs } ← two date clicks
-const DEFAULT_RANGE = { type: 'preset', key: '7d', label: 'Last 7 Days', startTs: null, endTs: null };
-let mainRange = { ...DEFAULT_RANGE };
-let anrRange  = { ...DEFAULT_RANGE };
+function makeDefaultRange() {
+  const r = presetToRange('7d');
+  return { type: 'preset', key: '7d', label: 'Last 7 Days', startTs: r.startTs, endTs: r.endTs };
+}
+let mainRange = makeDefaultRange();
+let anrRange  = makeDefaultRange();
 
 // ── Picker state ──
 let pickerOpen = false;
