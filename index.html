@@ -88,8 +88,6 @@
   .genre-pill:hover { background: #ddeeff; }
   .csv-import-row { display: flex; gap: 8px; margin-bottom: 1rem; align-items: center; }
   .csv-label { font-size: 12px; color: #888; }
-
-  /* ── Date picker ── */
   #date-picker-panel { position: fixed; background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.13); z-index: 900; display: none; overflow: hidden; }
   .picker-inner { display: flex; }
   .picker-sidebar { padding: 10px 6px; border-right: 1px solid #f0f0f0; display: flex; flex-direction: column; gap: 1px; min-width: 128px; }
@@ -265,7 +263,6 @@
   </div>
 </div>
 
-<!-- Date picker panel -->
 <div id="date-picker-panel"></div>
 
 <script>
@@ -279,46 +276,6 @@ let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
 let anrRoster = [], anrSnapshots = [], anrCurrentSort = { field: 'pct', dir: 'desc' };
 let weekWindows = [], currentWeekIdx = -1;
 
-// ── Active range state — one object each for main and anr ──
-// { type: 'preset', key, label, startTs, endTs }
-// { type: 'single', label, ts }      ← single day click
-// { type: 'range',  label, startTs, endTs } ← two date clicks
-function makeDefaultRange() {
-  const r = presetToRange('7d');
-  return { type: 'preset', key: '7d', label: 'Last 7 Days', startTs: r.startTs, endTs: r.endTs };
-}
-let mainRange = makeDefaultRange();
-let anrRange  = makeDefaultRange();
-
-// ── Picker state ──
-let pickerOpen = false;
-let pickerFor = null;
-let pickerStart = null;  // first clicked date (midnight ts)
-let pickerEnd = null;
-let pickerHoverTs = null;
-let pickerLeftYear, pickerLeftMonth;
-
-function initPickerMonths() {
-  const now = new Date();
-  pickerLeftMonth = now.getMonth() - 1;
-  pickerLeftYear  = now.getFullYear();
-  if (pickerLeftMonth < 0) { pickerLeftMonth = 11; pickerLeftYear--; }
-}
-initPickerMonths();
-
-function toStartOfDay(ts) {
-  const d = new Date(ts);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-function toEndOfDay(ts) { return toStartOfDay(ts) + DAY_MS - 1; }
-function fmtShortDate(ts) {
-  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-function fmtShort(ts) {
-  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-// ── Compute startTs/endTs for preset keys ──
 function presetToRange(key) {
   const now = Date.now();
   const todayStart = toStartOfDay(now);
@@ -333,10 +290,20 @@ function presetToRange(key) {
     case '180d':      return { startTs: now - 180* DAY_MS, endTs: now };
     case 'thisMonth': { const d=new Date(); return { startTs: new Date(d.getFullYear(),d.getMonth(),1).getTime(), endTs: now }; }
     case 'lastMonth': { const d=new Date(); return { startTs: new Date(d.getFullYear(),d.getMonth()-1,1).getTime(), endTs: new Date(d.getFullYear(),d.getMonth(),0,23,59,59,999).getTime() }; }
-    case 'allTime': return null; // handled separately
-    default: return null;
+    case 'allTime':   return null;
+    default:          return null;
   }
 }
+
+function makeDefaultRange() {
+  const r = presetToRange('7d');
+  return { type: 'preset', key: '7d', label: 'Last 7 Days', startTs: r.startTs, endTs: r.endTs };
+}
+let mainRange = makeDefaultRange();
+let anrRange  = makeDefaultRange();
+
+let pickerOpen = false, pickerFor = null, pickerStart = null, pickerEnd = null, pickerHoverTs = null;
+let pickerLeftYear, pickerLeftMonth;
 
 const PRESETS = [
   { key:'today',     label:'Today' },
@@ -352,18 +319,30 @@ const PRESETS = [
   { key:'allTime',   label:'All Time' },
 ];
 
-// ── Picker open/close ──
+function toStartOfDay(ts) {
+  const d = new Date(ts);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+function toEndOfDay(ts) { return toStartOfDay(ts) + DAY_MS - 1; }
+function fmtShortDate(ts) { return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+function fmtShort(ts) { return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+
+function initPickerMonths() {
+  const now = new Date();
+  pickerLeftMonth = now.getMonth() - 1;
+  pickerLeftYear  = now.getFullYear();
+  if (pickerLeftMonth < 0) { pickerLeftMonth = 11; pickerLeftYear--; }
+}
+initPickerMonths();
+
 function openPicker(forTab, btnEl) {
   if (pickerOpen && pickerFor === forTab) { closePicker(); return; }
   pickerFor = forTab;
   const active = forTab === 'main' ? mainRange : anrRange;
-  // Pre-fill calendar selection from active range
   if (active.type === 'single') {
-    pickerStart = toStartOfDay(active.ts);
-    pickerEnd = null;
+    pickerStart = toStartOfDay(active.ts); pickerEnd = null;
   } else if (active.type === 'range') {
-    pickerStart = toStartOfDay(active.startTs);
-    pickerEnd   = toStartOfDay(active.endTs);
+    pickerStart = toStartOfDay(active.startTs); pickerEnd = toStartOfDay(active.endTs);
   } else {
     pickerStart = null; pickerEnd = null;
   }
@@ -401,18 +380,14 @@ function renderPicker() {
 function buildPickerHTML() {
   let rightMonth = pickerLeftMonth + 1, rightYear = pickerLeftYear;
   if (rightMonth > 11) { rightMonth = 0; rightYear++; }
-
   const active = pickerFor === 'main' ? mainRange : anrRange;
   const activePresetKey = active.type === 'preset' ? active.key : null;
-
   const sidebarHTML = PRESETS.map(p =>
-    `<div class="picker-preset${activePresetKey === p.key ? ' picker-preset-active' : ''}" onclick="applyPreset('${p.key}')">${p.label}</div>`
+    `<div class="picker-preset${activePresetKey === p.key ? ' picker-preset-active' : ''}" onclick="applyPreset('${p.key}'); event.stopPropagation();">${p.label}</div>`
   ).join('');
-
   const hint = pickerStart && !pickerEnd
-    ? 'Click a second date to complete range, or click same date for single day'
+    ? 'Click a second date to complete range, or same date for a single day'
     : 'Click a date to select';
-
   return `<div class="picker-inner">
     <div class="picker-sidebar">${sidebarHTML}</div>
     <div>
@@ -429,16 +404,13 @@ function buildCalMonth(year, month, side) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDow    = new Date(year, month, 1).getDay();
   const todayTs     = toStartOfDay(Date.now());
-
   let lo = pickerStart, hi = pickerEnd;
   if (lo && !hi && pickerHoverTs && pickerHoverTs !== lo) {
     if (pickerHoverTs > lo) { hi = pickerHoverTs; }
     else { lo = pickerHoverTs; hi = pickerStart; }
   }
-
   let daysHTML = '';
   for (let i = 0; i < firstDow; i++) daysHTML += `<div class="picker-day picker-empty"></div>`;
-
   for (let d = 1; d <= daysInMonth; d++) {
     const ts = new Date(year, month, d).getTime();
     let cls = 'picker-day';
@@ -451,14 +423,13 @@ function buildCalMonth(year, month, side) {
     } else if (lo && ts === lo) {
       cls += ' picker-range-start picker-range-end';
     }
-    daysHTML += `<div class="${cls}" onclick="pickerClickDate(${ts})" onmouseenter="pickerSetHover(${ts})" onmouseleave="pickerSetHover(null)">${d}</div>`;
+    daysHTML += `<div class="${cls}" onclick="pickerClickDate(${ts}); event.stopPropagation();" onmouseenter="pickerSetHover(${ts})" onmouseleave="pickerSetHover(null)">${d}</div>`;
   }
-
   return `<div>
     <div class="picker-month-header">
-      <button class="picker-nav${side==='right'?' picker-nav-hidden':''}" onclick="pickerNavMonth(-1)">‹</button>
+      <button class="picker-nav${side==='right'?' picker-nav-hidden':''}" onclick="pickerNavMonth(-1); event.stopPropagation();">‹</button>
       <span class="picker-month-label">${MONTH_NAMES[month]} ${year}</span>
-      <button class="picker-nav${side==='left'?' picker-nav-hidden':''}" onclick="pickerNavMonth(1)">›</button>
+      <button class="picker-nav${side==='left'?' picker-nav-hidden':''}" onclick="pickerNavMonth(1); event.stopPropagation();">›</button>
     </div>
     <div class="picker-weekdays"><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div>
     <div class="picker-days">${daysHTML}</div>
@@ -479,30 +450,21 @@ function pickerSetHover(ts) {
 
 function pickerClickDate(ts) {
   if (!pickerStart) {
-    // First click — set start, wait for second
-    pickerStart = ts;
-    pickerEnd = null;
-    pickerHoverTs = null;
+    pickerStart = ts; pickerEnd = null; pickerHoverTs = null;
     renderPicker();
   } else if (ts === pickerStart) {
-    // Clicked same date twice — single day
     applyDateRange(ts, ts, true);
   } else {
-    // Second click — apply range
-    const s = Math.min(pickerStart, ts);
-    const e = Math.max(pickerStart, ts);
-    applyDateRange(s, e, false);
+    applyDateRange(Math.min(pickerStart, ts), Math.max(pickerStart, ts), false);
   }
 }
 
 function applyDateRange(startTs, endTs, isSingleDay) {
   let range;
   if (isSingleDay) {
-    const label = fmtShortDate(startTs);
-    range = { type: 'single', label, ts: startTs, startTs, endTs: toEndOfDay(startTs) };
+    range = { type: 'single', label: fmtShortDate(startTs), ts: startTs, startTs, endTs: toEndOfDay(startTs) };
   } else {
-    const label = `${fmtShortDate(startTs)} – ${fmtShortDate(endTs)}`;
-    range = { type: 'range', label, startTs, endTs: toEndOfDay(endTs) };
+    range = { type: 'range', label: `${fmtShortDate(startTs)} – ${fmtShortDate(endTs)}`, startTs, endTs: toEndOfDay(endTs) };
   }
   setActiveRange(range);
 }
@@ -512,9 +474,7 @@ function applyPreset(key) {
   if (key === 'allTime') {
     const snaps = pickerFor === 'main' ? snapshots : anrSnapshots;
     if (!snaps.length) return;
-    const startTs = snapTs(snaps[0]);
-    const endTs   = snapTs(snaps[snaps.length - 1]);
-    range = { type: 'preset', key, label: 'All Time', startTs, endTs };
+    range = { type: 'preset', key, label: 'All Time', startTs: snapTs(snaps[0]), endTs: snapTs(snaps[snaps.length-1]) };
   } else {
     const p = PRESETS.find(x => x.key === key);
     const r = presetToRange(key);
@@ -536,7 +496,6 @@ function setActiveRange(range) {
   else renderAnrRoster();
 }
 
-// ── Close on outside click / Escape ──
 document.addEventListener('click', function(e) {
   if (!pickerOpen) return;
   const panel = document.getElementById('date-picker-panel');
@@ -545,42 +504,27 @@ document.addEventListener('click', function(e) {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && pickerOpen) closePicker(); });
 
-// ── Snapshot pair lookup for a range ──
 function getSnapPairForRange(handle, range, snapList) {
   if (!snapList.length) return { cur: null, prev: null };
   const { startTs, endTs } = range;
-
-  // Find closest snapshot to endTs (current)
-  let endSnap = null, endBest = Infinity;
-  // Find closest snapshot to startTs (prev)
-  let startSnap = null, startBest = Infinity;
-
+  let endSnap = null, endBest = Infinity, startSnap = null, startBest = Infinity;
   for (const snap of snapList) {
     const ts = snapTs(snap);
-    const dEnd   = Math.abs(ts - endTs);
-    const dStart = Math.abs(ts - startTs);
+    const dEnd = Math.abs(ts - endTs), dStart = Math.abs(ts - startTs);
     if (dEnd   < endBest)   { endBest   = dEnd;   endSnap   = snap; }
     if (dStart < startBest) { startBest = dStart; startSnap = snap; }
   }
-
   const curEntry  = endSnap   ? endSnap.data.find(d => d.handle === handle)   : null;
   const prevEntry = startSnap ? startSnap.data.find(d => d.handle === handle) : null;
-
-  // If start and end resolve to same snapshot, treat prev as the one before it
   if (endSnap && startSnap && endSnap === startSnap) {
     const idx = snapList.indexOf(endSnap);
     const altSnap = idx > 0 ? snapList[idx - 1] : null;
     const altEntry = altSnap ? altSnap.data.find(d => d.handle === handle) : null;
     return { cur: curEntry ? curEntry.followers : null, prev: altEntry ? altEntry.followers : null };
   }
-
-  return {
-    cur:  curEntry  ? curEntry.followers  : null,
-    prev: prevEntry ? prevEntry.followers : null,
-  };
+  return { cur: curEntry ? curEntry.followers : null, prev: prevEntry ? prevEntry.followers : null };
 }
 
-// ── Existing helpers ──
 function saveStarred() { localStorage.setItem(STARRED_KEY, JSON.stringify([...starred])); }
 function toggleStar(handle) {
   if(starred.has(handle)) starred.delete(handle); else starred.add(handle);
@@ -624,7 +568,7 @@ function showApp() {
 
 document.getElementById('pw-input').addEventListener('keydown', e => { if(e.key==='Enter') checkPassword(); });
 const savedAuth = sessionStorage.getItem('ig_auth');
-if (savedAuth==='admin')  { isAdmin=true;  isAnr=false; showApp(); }
+if (savedAuth==='admin')       { isAdmin=true;  isAnr=false; showApp(); }
 else if (savedAuth==='viewer') { isAdmin=false; isAnr=false; showApp(); }
 else if (savedAuth==='anr')    { isAdmin=false; isAnr=true;  showApp(); }
 
