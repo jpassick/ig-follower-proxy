@@ -32,10 +32,8 @@
   .roster-tabs { display: flex; gap: 6px; }
   .roster-tab { font-size: 12px; padding: 4px 12px; border-radius: 20px; cursor: pointer; border: 1px solid #ddd; background: transparent; color: #888; }
   .roster-tab.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
-  .period-tabs { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
-  .period-tab { font-size: 11px; padding: 3px 10px; border-radius: 20px; cursor: pointer; border: 1px solid #ddd; background: transparent; color: #888; white-space: nowrap; }
-  .period-tab.active { background: #f0f0f0; color: #1a1a1a; border-color: #bbb; font-weight: 500; }
-  .period-tab.custom-active { background: #1a1a1a !important; color: #fff !important; border-color: #1a1a1a !important; font-weight: 500; }
+  .period-btn { font-size: 11px; padding: 4px 12px; border-radius: 20px; cursor: pointer; border: 1px solid #bbb; background: #f0f0f0; color: #1a1a1a; font-weight: 500; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
+  .period-btn:hover { background: #e8e8e8; border-color: #aaa; }
   .period-label { font-size: 11px; color: #bbb; margin-right: 4px; }
   .top-actions { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
   .add-row { display: flex; gap: 8px; margin-bottom: 1rem; }
@@ -94,8 +92,8 @@
   /* ── Date picker ── */
   #date-picker-panel { position: fixed; background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.13); z-index: 900; display: none; overflow: hidden; }
   .picker-inner { display: flex; }
-  .picker-sidebar { padding: 10px 6px; border-right: 1px solid #f0f0f0; display: flex; flex-direction: column; gap: 1px; min-width: 118px; }
-  .picker-preset { padding: 5px 10px; border-radius: 6px; cursor: pointer; color: #444; font-size: 11.5px; white-space: nowrap; user-select: none; }
+  .picker-sidebar { padding: 10px 6px; border-right: 1px solid #f0f0f0; display: flex; flex-direction: column; gap: 1px; min-width: 128px; }
+  .picker-preset { padding: 6px 12px; border-radius: 6px; cursor: pointer; color: #444; font-size: 12px; white-space: nowrap; user-select: none; }
   .picker-preset:hover { background: #f5f5f5; }
   .picker-preset.picker-preset-active { background: #1a1a1a; color: #fff; }
   .picker-cals { display: flex; gap: 20px; padding: 14px 16px 10px; }
@@ -104,17 +102,17 @@
   .picker-nav { background: none; border: 1px solid #eee; border-radius: 5px; padding: 1px 6px; font-size: 13px; color: #888; cursor: pointer; line-height: 1.5; }
   .picker-nav:hover { background: #f0f0f0; color: #1a1a1a; border-color: #ccc; }
   .picker-nav.picker-nav-hidden { visibility: hidden; pointer-events: none; }
-  .picker-weekdays { display: grid; grid-template-columns: repeat(7, 26px); text-align: center; font-size: 10px; color: #ccc; margin-bottom: 3px; }
-  .picker-days { display: grid; grid-template-columns: repeat(7, 26px); }
-  .picker-day { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; font-size: 11.5px; cursor: pointer; border-radius: 4px; color: #1a1a1a; user-select: none; position: relative; }
-  .picker-day:hover { background: #f0f0f0; }
-  .picker-empty { cursor: default; background: none !important; }
+  .picker-weekdays { display: grid; grid-template-columns: repeat(7, 28px); text-align: center; font-size: 10px; color: #ccc; margin-bottom: 3px; }
+  .picker-days { display: grid; grid-template-columns: repeat(7, 28px); }
+  .picker-day { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; border-radius: 4px; color: #1a1a1a; user-select: none; }
+  .picker-day:hover:not(.picker-empty) { background: #f0f0f0; }
+  .picker-empty { cursor: default; }
   .picker-in-range { background: #f0f0f0 !important; border-radius: 0 !important; }
   .picker-range-start { background: #1a1a1a !important; color: #fff !important; border-radius: 4px 0 0 4px !important; }
   .picker-range-end { background: #1a1a1a !important; color: #fff !important; border-radius: 0 4px 4px 0 !important; }
   .picker-range-start.picker-range-end { border-radius: 4px !important; }
   .picker-today { font-weight: 700; }
-  .picker-hint { font-size: 10.5px; color: #bbb; text-align: center; padding: 6px 16px 10px; border-top: 1px solid #f5f5f5; }
+  .picker-hint { font-size: 11px; color: #bbb; text-align: center; padding: 6px 16px 10px; border-top: 1px solid #f5f5f5; }
 </style>
 </head>
 <body>
@@ -161,13 +159,11 @@
         <button class="roster-tab active" onclick="switchRosterTab('all')">Full roster</button>
         <button class="roster-tab" onclick="switchRosterTab('my')">My roster</button>
       </div>
-      <div class="period-tabs">
+      <div style="display:flex;align-items:center;gap:6px;">
         <span class="period-label">Growth period:</span>
-        <button class="period-tab" onclick="setPeriod(1)" id="period-1">24 hours</button>
-        <button class="period-tab active" onclick="setPeriod(7)" id="period-7">7 days</button>
-        <button class="period-tab" onclick="setPeriod(14)" id="period-14">14 days</button>
-        <button class="period-tab" onclick="setPeriod(30)" id="period-30">30 days</button>
-        <button class="period-tab" id="period-custom" onclick="openPicker('main', this)">Custom ▾</button>
+        <button class="period-btn" id="main-period-btn" onclick="openPicker('main', this)">
+          <span id="main-period-label">Last 7 Days</span> <span style="font-size:10px;opacity:0.6;">▾</span>
+        </button>
       </div>
     </div>
     <div class="add-row" id="add-row-el">
@@ -182,8 +178,8 @@
           <th style="width:4%"></th>
           <th style="width:26%" onclick="sortBy('handle')">Handle <span class="sort-arrow" id="sort-handle">↕</span></th>
           <th style="width:16%" onclick="sortBy('followers')">Followers <span class="sort-arrow" id="sort-followers">↕</span></th>
-          <th style="width:22%" onclick="sortBy('growth')" id="th-growth">Follower Growth <span class="sort-arrow active" id="sort-growth">▼</span></th>
-          <th style="width:22%" onclick="sortBy('pct')" id="th-pct">Follower Growth % <span class="sort-arrow" id="sort-pct">↕</span></th>
+          <th style="width:22%" onclick="sortBy('growth')">Follower Growth <span class="sort-arrow active" id="sort-growth">▼</span></th>
+          <th style="width:22%" onclick="sortBy('pct')">Follower Growth % <span class="sort-arrow" id="sort-pct">↕</span></th>
           <th style="width:6%"></th>
         </tr>
       </thead>
@@ -234,13 +230,11 @@
     <div class="progress-bar" id="anr-progress-bar"><div class="progress-bar-fill" id="anr-progress-fill"></div></div>
     <p class="last-updated" id="anr-last-updated" style="display:none;"></p>
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
-      <div class="period-tabs">
+      <div style="display:flex;align-items:center;gap:6px;">
         <span class="period-label">Growth period:</span>
-        <button class="period-tab" onclick="setAnrPeriod(1)" id="anr-period-1">24 hours</button>
-        <button class="period-tab active" onclick="setAnrPeriod(7)" id="anr-period-7">7 days</button>
-        <button class="period-tab" onclick="setAnrPeriod(14)" id="anr-period-14">14 days</button>
-        <button class="period-tab" onclick="setAnrPeriod(30)" id="anr-period-30">30 days</button>
-        <button class="period-tab" id="anr-period-custom" onclick="openPicker('anr', this)">Custom ▾</button>
+        <button class="period-btn" id="anr-period-btn" onclick="openPicker('anr', this)">
+          <span id="anr-period-label">Last 7 Days</span> <span style="font-size:10px;opacity:0.6;">▾</span>
+        </button>
       </div>
     </div>
     <div class="add-row" id="anr-add-row-el">
@@ -276,63 +270,108 @@
 
 <script>
 const STARRED_KEY = 'ig_starred_v1';
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 let roster = [], snapshots = [], currentSort = { field: 'growth', dir: 'desc' }, isAdmin = false, isAnr = false;
-let currentRosterTab = 'all', currentPeriod = 7;
+let currentRosterTab = 'all';
 let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
+let anrRoster = [], anrSnapshots = [], anrCurrentSort = { field: 'pct', dir: 'desc' };
+let weekWindows = [], currentWeekIdx = -1;
 
-let anrRoster = [], anrSnapshots = [], anrCurrentSort = { field: 'pct', dir: 'desc' }, anrCurrentPeriod = 7;
+// ── Active range state — one object each for main and anr ──
+// { type: 'preset', key, label, startTs, endTs }
+// { type: 'single', label, ts }      ← single day click
+// { type: 'range',  label, startTs, endTs } ← two date clicks
+const DEFAULT_RANGE = { type: 'preset', key: '7d', label: 'Last 7 Days', startTs: null, endTs: null };
+let mainRange = { ...DEFAULT_RANGE };
+let anrRange  = { ...DEFAULT_RANGE };
 
-let weekWindows = [];
-let currentWeekIdx = -1;
-
-// ── Custom date range state ──
-let customRange = null;
-let anrCustomRange = null;
+// ── Picker state ──
 let pickerOpen = false;
 let pickerFor = null;
-let pickerStart = null;
+let pickerStart = null;  // first clicked date (midnight ts)
 let pickerEnd = null;
 let pickerHoverTs = null;
-let pickerLeftYear = new Date().getFullYear();
-let pickerLeftMonth = new Date().getMonth() - 1;
-if (pickerLeftMonth < 0) { pickerLeftMonth = 11; pickerLeftYear--; }
-const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const DAY_MS = 24 * 60 * 60 * 1000;
+let pickerLeftYear, pickerLeftMonth;
+
+function initPickerMonths() {
+  const now = new Date();
+  pickerLeftMonth = now.getMonth() - 1;
+  pickerLeftYear  = now.getFullYear();
+  if (pickerLeftMonth < 0) { pickerLeftMonth = 11; pickerLeftYear--; }
+}
+initPickerMonths();
 
 function toStartOfDay(ts) {
   const d = new Date(ts);
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
-function fmtPickerDate(ts) {
+function toEndOfDay(ts) { return toStartOfDay(ts) + DAY_MS - 1; }
+function fmtShortDate(ts) {
   return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
+function fmtShort(ts) {
+  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
-function openPicker(forTab, btnEl) {
-  pickerFor = forTab;
-  const existing = forTab === 'main' ? customRange : anrCustomRange;
-  if (existing) {
-    pickerStart = toStartOfDay(existing.startTs);
-    pickerEnd = toStartOfDay(existing.endTs);
-    const d = new Date(pickerStart);
-    pickerLeftYear = d.getFullYear();
-    pickerLeftMonth = d.getMonth();
-  } else {
-    pickerStart = null;
-    pickerEnd = null;
-    pickerHoverTs = null;
-    const now = new Date();
-    pickerLeftMonth = now.getMonth() - 1;
-    pickerLeftYear = now.getFullYear();
-    if (pickerLeftMonth < 0) { pickerLeftMonth = 11; pickerLeftYear--; }
+// ── Compute startTs/endTs for preset keys ──
+function presetToRange(key) {
+  const now = Date.now();
+  const todayStart = toStartOfDay(now);
+  switch(key) {
+    case 'today':     return { startTs: todayStart, endTs: now };
+    case 'yesterday': return { startTs: todayStart - DAY_MS, endTs: todayStart - 1 };
+    case '7d':        return { startTs: now - 7  * DAY_MS, endTs: now };
+    case '14d':       return { startTs: now - 14 * DAY_MS, endTs: now };
+    case '30d':       return { startTs: now - 30 * DAY_MS, endTs: now };
+    case '60d':       return { startTs: now - 60 * DAY_MS, endTs: now };
+    case '90d':       return { startTs: now - 90 * DAY_MS, endTs: now };
+    case '180d':      return { startTs: now - 180* DAY_MS, endTs: now };
+    case 'thisMonth': { const d=new Date(); return { startTs: new Date(d.getFullYear(),d.getMonth(),1).getTime(), endTs: now }; }
+    case 'lastMonth': { const d=new Date(); return { startTs: new Date(d.getFullYear(),d.getMonth()-1,1).getTime(), endTs: new Date(d.getFullYear(),d.getMonth(),0,23,59,59,999).getTime() }; }
+    case 'allTime': return null; // handled separately
+    default: return null;
   }
+}
+
+const PRESETS = [
+  { key:'today',     label:'Today' },
+  { key:'yesterday', label:'Yesterday' },
+  { key:'7d',        label:'Last 7 Days' },
+  { key:'14d',       label:'Last 14 Days' },
+  { key:'30d',       label:'Last 30 Days' },
+  { key:'60d',       label:'Last 60 Days' },
+  { key:'90d',       label:'Last 90 Days' },
+  { key:'180d',      label:'Last 180 Days' },
+  { key:'thisMonth', label:'This Month' },
+  { key:'lastMonth', label:'Last Month' },
+  { key:'allTime',   label:'All Time' },
+];
+
+// ── Picker open/close ──
+function openPicker(forTab, btnEl) {
+  if (pickerOpen && pickerFor === forTab) { closePicker(); return; }
+  pickerFor = forTab;
+  const active = forTab === 'main' ? mainRange : anrRange;
+  // Pre-fill calendar selection from active range
+  if (active.type === 'single') {
+    pickerStart = toStartOfDay(active.ts);
+    pickerEnd = null;
+  } else if (active.type === 'range') {
+    pickerStart = toStartOfDay(active.startTs);
+    pickerEnd   = toStartOfDay(active.endTs);
+  } else {
+    pickerStart = null; pickerEnd = null;
+  }
+  pickerHoverTs = null;
+  if (active.type !== 'single' && active.type !== 'range') initPickerMonths();
   renderAndShowPicker(btnEl);
   pickerOpen = true;
 }
 
 function closePicker() {
-  const panel = document.getElementById('date-picker-panel');
-  panel.style.display = 'none';
+  document.getElementById('date-picker-panel').style.display = 'none';
   pickerOpen = false;
 }
 
@@ -340,14 +379,13 @@ function renderAndShowPicker(anchorEl) {
   const panel = document.getElementById('date-picker-panel');
   panel.innerHTML = buildPickerHTML();
   panel.style.display = 'block';
-  const rect = anchorEl ? anchorEl.getBoundingClientRect() : { bottom: 80, left: 80 };
+  const rect = anchorEl.getBoundingClientRect();
   const scrollY = window.scrollY || 0;
-  const scrollX = window.scrollX || 0;
-  const panelW = 530;
-  let left = rect.left + scrollX;
+  const panelW = 560;
+  let left = rect.left + (window.scrollX || 0);
   if (left + panelW > window.innerWidth - 8) left = window.innerWidth - panelW - 8;
   if (left < 8) left = 8;
-  panel.style.top = (rect.bottom + scrollY + 6) + 'px';
+  panel.style.top  = (rect.bottom + scrollY + 6) + 'px';
   panel.style.left = left + 'px';
 }
 
@@ -358,31 +396,19 @@ function renderPicker() {
 }
 
 function buildPickerHTML() {
-  let rightMonth = pickerLeftMonth + 1;
-  let rightYear = pickerLeftYear;
+  let rightMonth = pickerLeftMonth + 1, rightYear = pickerLeftYear;
   if (rightMonth > 11) { rightMonth = 0; rightYear++; }
 
-  const activePreset = detectActivePreset();
+  const active = pickerFor === 'main' ? mainRange : anrRange;
+  const activePresetKey = active.type === 'preset' ? active.key : null;
 
-  const presets = [
-    { key: 'today', label: 'Today' },
-    { key: 'yesterday', label: 'Yesterday' },
-    { key: '7d', label: 'Last 7 Days' },
-    { key: '14d', label: 'Last 14 Days' },
-    { key: '30d', label: 'Last 30 Days' },
-    { key: '60d', label: 'Last 60 Days' },
-    { key: '90d', label: 'Last 90 Days' },
-    { key: '180d', label: 'Last 180 Days' },
-    { key: 'thisMonth', label: 'This Month' },
-    { key: 'lastMonth', label: 'Last Month' },
-    { key: 'allTime', label: 'All Time' },
-  ];
-
-  const sidebarHTML = presets.map(p =>
-    `<div class="picker-preset${activePreset === p.key ? ' picker-preset-active' : ''}" onclick="applyPreset('${p.key}')">${p.label}</div>`
+  const sidebarHTML = PRESETS.map(p =>
+    `<div class="picker-preset${activePresetKey === p.key ? ' picker-preset-active' : ''}" onclick="applyPreset('${p.key}')">${p.label}</div>`
   ).join('');
 
-  const hint = pickerStart && !pickerEnd ? 'Click a second date to set end' : (!pickerStart ? 'Click a date to start' : '');
+  const hint = pickerStart && !pickerEnd
+    ? 'Click a second date to complete range, or click same date for single day'
+    : 'Click a date to select';
 
   return `<div class="picker-inner">
     <div class="picker-sidebar">${sidebarHTML}</div>
@@ -391,49 +417,45 @@ function buildPickerHTML() {
         ${buildCalMonth(pickerLeftYear, pickerLeftMonth, 'left')}
         ${buildCalMonth(rightYear, rightMonth, 'right')}
       </div>
-      ${hint ? `<div class="picker-hint">${hint}</div>` : ''}
+      <div class="picker-hint">${hint}</div>
     </div>
   </div>`;
 }
 
 function buildCalMonth(year, month, side) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDow = new Date(year, month, 1).getDay();
-  const todayTs = toStartOfDay(Date.now());
+  const firstDow    = new Date(year, month, 1).getDay();
+  const todayTs     = toStartOfDay(Date.now());
 
   let lo = pickerStart, hi = pickerEnd;
-  if (lo && !hi && pickerHoverTs) {
-    if (pickerHoverTs >= lo) { hi = pickerHoverTs; }
+  if (lo && !hi && pickerHoverTs && pickerHoverTs !== lo) {
+    if (pickerHoverTs > lo) { hi = pickerHoverTs; }
     else { lo = pickerHoverTs; hi = pickerStart; }
   }
 
   let daysHTML = '';
-  for (let i = 0; i < firstDow; i++) {
-    daysHTML += `<div class="picker-day picker-empty"></div>`;
-  }
+  for (let i = 0; i < firstDow; i++) daysHTML += `<div class="picker-day picker-empty"></div>`;
+
   for (let d = 1; d <= daysInMonth; d++) {
     const ts = new Date(year, month, d).getTime();
-    let classes = 'picker-day';
-    if (ts === todayTs) classes += ' picker-today';
+    let cls = 'picker-day';
+    if (ts === todayTs) cls += ' picker-today';
     if (lo && hi) {
-      const effLo = Math.min(lo, hi), effHi = Math.max(lo, hi);
-      if (ts === effLo) classes += ' picker-range-start';
-      if (ts === effHi) classes += ' picker-range-end';
-      if (ts > effLo && ts < effHi) classes += ' picker-in-range';
+      const effLo = Math.min(lo,hi), effHi = Math.max(lo,hi);
+      if (ts === effLo) cls += ' picker-range-start';
+      if (ts === effHi) cls += ' picker-range-end';
+      if (ts > effLo && ts < effHi) cls += ' picker-in-range';
     } else if (lo && ts === lo) {
-      classes += ' picker-range-start picker-range-end';
+      cls += ' picker-range-start picker-range-end';
     }
-    daysHTML += `<div class="${classes}" onclick="pickerClickDate(${ts})" onmouseenter="pickerSetHover(${ts})" onmouseleave="pickerSetHover(null)">${d}</div>`;
+    daysHTML += `<div class="${cls}" onclick="pickerClickDate(${ts})" onmouseenter="pickerSetHover(${ts})" onmouseleave="pickerSetHover(null)">${d}</div>`;
   }
-
-  const prevHidden = side === 'right' ? ' picker-nav-hidden' : '';
-  const nextHidden = side === 'left' ? ' picker-nav-hidden' : '';
 
   return `<div>
     <div class="picker-month-header">
-      <button class="picker-nav${prevHidden}" onclick="pickerNavMonth(-1)">‹</button>
+      <button class="picker-nav${side==='right'?' picker-nav-hidden':''}" onclick="pickerNavMonth(-1)">‹</button>
       <span class="picker-month-label">${MONTH_NAMES[month]} ${year}</span>
-      <button class="picker-nav${nextHidden}" onclick="pickerNavMonth(1)">›</button>
+      <button class="picker-nav${side==='left'?' picker-nav-hidden':''}" onclick="pickerNavMonth(1)">›</button>
     </div>
     <div class="picker-weekdays"><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div>
     <div class="picker-days">${daysHTML}</div>
@@ -443,21 +465,8 @@ function buildCalMonth(year, month, side) {
 function pickerNavMonth(dir) {
   pickerLeftMonth += dir;
   if (pickerLeftMonth > 11) { pickerLeftMonth = 0; pickerLeftYear++; }
-  if (pickerLeftMonth < 0) { pickerLeftMonth = 11; pickerLeftYear--; }
+  if (pickerLeftMonth < 0)  { pickerLeftMonth = 11; pickerLeftYear--; }
   renderPicker();
-}
-
-function pickerClickDate(ts) {
-  if (!pickerStart || (pickerStart && pickerEnd)) {
-    pickerStart = ts;
-    pickerEnd = null;
-    pickerHoverTs = null;
-    renderPicker();
-  } else {
-    if (ts < pickerStart) { pickerEnd = pickerStart; pickerStart = ts; }
-    else { pickerEnd = ts; }
-    applyCustomRange(pickerStart, pickerEnd);
-  }
 }
 
 function pickerSetHover(ts) {
@@ -465,134 +474,110 @@ function pickerSetHover(ts) {
   if (pickerStart && !pickerEnd) renderPicker();
 }
 
-function applyPreset(key) {
-  const now = Date.now();
-  const todayStart = toStartOfDay(now);
-  let start, end;
-  switch (key) {
-    case 'today':     start = todayStart; end = now; break;
-    case 'yesterday': start = todayStart - DAY_MS; end = todayStart - 1; break;
-    case '7d':        start = now - 7 * DAY_MS; end = now; break;
-    case '14d':       start = now - 14 * DAY_MS; end = now; break;
-    case '30d':       start = now - 30 * DAY_MS; end = now; break;
-    case '60d':       start = now - 60 * DAY_MS; end = now; break;
-    case '90d':       start = now - 90 * DAY_MS; end = now; break;
-    case '180d':      start = now - 180 * DAY_MS; end = now; break;
-    case 'thisMonth': { const d = new Date(); start = new Date(d.getFullYear(), d.getMonth(), 1).getTime(); end = now; break; }
-    case 'lastMonth': { const d = new Date(); start = new Date(d.getFullYear(), d.getMonth() - 1, 1).getTime(); end = new Date(d.getFullYear(), d.getMonth(), 0, 23, 59, 59, 999).getTime(); break; }
-    case 'allTime': {
-      const snaps = pickerFor === 'main' ? snapshots : anrSnapshots;
-      if (!snaps.length) return;
-      start = snapTs(snaps[0]); end = snapTs(snaps[snaps.length - 1]); break;
-    }
-    default: return;
+function pickerClickDate(ts) {
+  if (!pickerStart) {
+    // First click — set start, wait for second
+    pickerStart = ts;
+    pickerEnd = null;
+    pickerHoverTs = null;
+    renderPicker();
+  } else if (ts === pickerStart) {
+    // Clicked same date twice — single day
+    applyDateRange(ts, ts, true);
+  } else {
+    // Second click — apply range
+    const s = Math.min(pickerStart, ts);
+    const e = Math.max(pickerStart, ts);
+    applyDateRange(s, e, false);
   }
-  pickerStart = toStartOfDay(start);
-  pickerEnd = toStartOfDay(end);
-  applyCustomRange(start, end);
 }
 
-function applyCustomRange(startTs, endTs) {
-  const range = { startTs, endTs };
-  if (pickerFor === 'main') {
-    customRange = range;
-    ['period-1','period-7','period-14','period-30'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('active'); });
-    updateCustomBtn('main');
-    renderRoster();
+function applyDateRange(startTs, endTs, isSingleDay) {
+  let range;
+  if (isSingleDay) {
+    const label = fmtShortDate(startTs);
+    range = { type: 'single', label, ts: startTs, startTs, endTs: toEndOfDay(startTs) };
   } else {
-    anrCustomRange = range;
-    ['anr-period-1','anr-period-7','anr-period-14','anr-period-30'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('active'); });
-    updateCustomBtn('anr');
-    renderAnrRoster();
+    const label = `${fmtShortDate(startTs)} – ${fmtShortDate(endTs)}`;
+    range = { type: 'range', label, startTs, endTs: toEndOfDay(endTs) };
+  }
+  setActiveRange(range);
+}
+
+function applyPreset(key) {
+  let range;
+  if (key === 'allTime') {
+    const snaps = pickerFor === 'main' ? snapshots : anrSnapshots;
+    if (!snaps.length) return;
+    const startTs = snapTs(snaps[0]);
+    const endTs   = snapTs(snaps[snaps.length - 1]);
+    range = { type: 'preset', key, label: 'All Time', startTs, endTs };
+  } else {
+    const p = PRESETS.find(x => x.key === key);
+    const r = presetToRange(key);
+    range = { type: 'preset', key, label: p.label, startTs: r.startTs, endTs: r.endTs };
+  }
+  setActiveRange(range);
+}
+
+function setActiveRange(range) {
+  if (pickerFor === 'main') {
+    mainRange = range;
+    document.getElementById('main-period-label').textContent = range.label;
+  } else {
+    anrRange = range;
+    document.getElementById('anr-period-label').textContent = range.label;
   }
   closePicker();
+  if (pickerFor === 'main') renderRoster();
+  else renderAnrRoster();
 }
 
-function clearCustomRange(forTab, e) {
-  if (e) e.stopPropagation();
-  if (forTab === 'main') {
-    customRange = null;
-    updateCustomBtn('main');
-    setPeriod(currentPeriod);
-  } else {
-    anrCustomRange = null;
-    updateCustomBtn('anr');
-    setAnrPeriod(anrCurrentPeriod);
-  }
-}
-
-function updateCustomBtn(forTab) {
-  const id = forTab === 'main' ? 'period-custom' : 'anr-period-custom';
-  const btn = document.getElementById(id);
-  if (!btn) return;
-  const range = forTab === 'main' ? customRange : anrCustomRange;
-  if (range) {
-    btn.classList.add('custom-active');
-    btn.innerHTML = `${fmtPickerDate(range.startTs)} – ${fmtPickerDate(range.endTs)} <span onclick="clearCustomRange('${forTab}', event)" style="margin-left:3px;opacity:0.65;font-size:10px;">✕</span>`;
-  } else {
-    btn.classList.remove('custom-active');
-    btn.textContent = 'Custom ▾';
-  }
-}
-
-function detectActivePreset() {
-  if (!pickerStart || !pickerEnd) return null;
-  const now = Date.now();
-  const todayStart = toStartOfDay(now);
-  const checks = [
-    { key: 'today',  start: todayStart, end: todayStart },
-    { key: 'yesterday', start: todayStart - DAY_MS, end: todayStart - DAY_MS },
-    { key: '7d',   start: toStartOfDay(now - 7 * DAY_MS),   end: todayStart },
-    { key: '14d',  start: toStartOfDay(now - 14 * DAY_MS),  end: todayStart },
-    { key: '30d',  start: toStartOfDay(now - 30 * DAY_MS),  end: todayStart },
-    { key: '60d',  start: toStartOfDay(now - 60 * DAY_MS),  end: todayStart },
-    { key: '90d',  start: toStartOfDay(now - 90 * DAY_MS),  end: todayStart },
-    { key: '180d', start: toStartOfDay(now - 180 * DAY_MS), end: todayStart },
-  ];
-  for (const c of checks) {
-    if (Math.abs(pickerStart - c.start) < DAY_MS && Math.abs(pickerEnd - c.end) < DAY_MS) return c.key;
-  }
-  return null;
-}
-
+// ── Close on outside click / Escape ──
 document.addEventListener('click', function(e) {
   if (!pickerOpen) return;
   const panel = document.getElementById('date-picker-panel');
-  const customBtns = [document.getElementById('period-custom'), document.getElementById('anr-period-custom')];
-  if (!panel.contains(e.target) && !customBtns.some(b => b && b.contains(e.target))) closePicker();
+  const btns = [document.getElementById('main-period-btn'), document.getElementById('anr-period-btn')];
+  if (!panel.contains(e.target) && !btns.some(b => b && b.contains(e.target))) closePicker();
 });
-document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && pickerOpen) closePicker(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && pickerOpen) closePicker(); });
 
-function getCustomSnapPair(handle) {
-  if (!customRange || !snapshots.length) return { current: null, prev: null };
-  let endSnap = null, endBest = Infinity, startSnap = null, startBest = Infinity;
-  for (const snap of snapshots) {
+// ── Snapshot pair lookup for a range ──
+function getSnapPairForRange(handle, range, snapList) {
+  if (!snapList.length) return { cur: null, prev: null };
+  const { startTs, endTs } = range;
+
+  // Find closest snapshot to endTs (current)
+  let endSnap = null, endBest = Infinity;
+  // Find closest snapshot to startTs (prev)
+  let startSnap = null, startBest = Infinity;
+
+  for (const snap of snapList) {
     const ts = snapTs(snap);
-    const dEnd = Math.abs(ts - customRange.endTs);
-    const dStart = Math.abs(ts - customRange.startTs);
-    if (dEnd < endBest) { endBest = dEnd; endSnap = snap; }
+    const dEnd   = Math.abs(ts - endTs);
+    const dStart = Math.abs(ts - startTs);
+    if (dEnd   < endBest)   { endBest   = dEnd;   endSnap   = snap; }
     if (dStart < startBest) { startBest = dStart; startSnap = snap; }
   }
-  const curEntry = endSnap ? endSnap.data.find(d => d.handle === handle) : null;
-  const prevEntry = startSnap ? startSnap.data.find(d => d.handle === handle) : null;
-  return { current: curEntry ? curEntry.followers : null, prev: prevEntry ? prevEntry.followers : null };
-}
 
-function getAnrCustomSnapPair(handle) {
-  if (!anrCustomRange || !anrSnapshots.length) return { current: null, prev: null };
-  let endSnap = null, endBest = Infinity, startSnap = null, startBest = Infinity;
-  for (const snap of anrSnapshots) {
-    const ts = new Date(snap.date).getTime() || 0;
-    const dEnd = Math.abs(ts - anrCustomRange.endTs);
-    const dStart = Math.abs(ts - anrCustomRange.startTs);
-    if (dEnd < endBest) { endBest = dEnd; endSnap = snap; }
-    if (dStart < startBest) { startBest = dStart; startSnap = snap; }
+  const curEntry  = endSnap   ? endSnap.data.find(d => d.handle === handle)   : null;
+  const prevEntry = startSnap ? startSnap.data.find(d => d.handle === handle) : null;
+
+  // If start and end resolve to same snapshot, treat prev as the one before it
+  if (endSnap && startSnap && endSnap === startSnap) {
+    const idx = snapList.indexOf(endSnap);
+    const altSnap = idx > 0 ? snapList[idx - 1] : null;
+    const altEntry = altSnap ? altSnap.data.find(d => d.handle === handle) : null;
+    return { cur: curEntry ? curEntry.followers : null, prev: altEntry ? altEntry.followers : null };
   }
-  const curEntry = endSnap ? endSnap.data.find(d => d.handle === handle) : null;
-  const prevEntry = startSnap ? startSnap.data.find(d => d.handle === handle) : null;
-  return { current: curEntry ? curEntry.followers : null, prev: prevEntry ? prevEntry.followers : null };
+
+  return {
+    cur:  curEntry  ? curEntry.followers  : null,
+    prev: prevEntry ? prevEntry.followers : null,
+  };
 }
 
+// ── Existing helpers ──
 function saveStarred() { localStorage.setItem(STARRED_KEY, JSON.stringify([...starred])); }
 function toggleStar(handle) {
   if(starred.has(handle)) starred.delete(handle); else starred.add(handle);
@@ -606,15 +591,15 @@ async function checkPassword() {
   const val = document.getElementById('pw-input').value;
   const errEl = document.getElementById('pw-err');
   try {
-    const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: val }) });
+    const res = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:val}) });
     if (res.ok) {
       const data = await res.json();
       sessionStorage.setItem('ig_auth', data.role);
       isAdmin = (data.role === 'admin');
-      isAnr = (data.role === 'anr');
+      isAnr   = (data.role === 'anr');
       showApp();
     } else { errEl.style.display = 'block'; }
-  } catch (e) { console.error("Login error", e); alert("Connection error. Please try again."); }
+  } catch(e) { alert("Connection error. Please try again."); }
 }
 
 function showApp() {
@@ -631,15 +616,14 @@ function showApp() {
     document.getElementById('anr-csv-row').style.display = 'none';
   }
   loadAll();
-  if (isAnr || isAdmin) { loadAnrAll(); }
+  if (isAnr || isAdmin) loadAnrAll();
 }
 
 document.getElementById('pw-input').addEventListener('keydown', e => { if(e.key==='Enter') checkPassword(); });
-
 const savedAuth = sessionStorage.getItem('ig_auth');
-if (savedAuth === 'admin') { isAdmin = true; isAnr = false; showApp(); }
-else if (savedAuth === 'viewer') { isAdmin = false; isAnr = false; showApp(); }
-else if (savedAuth === 'anr') { isAdmin = false; isAnr = true; showApp(); }
+if (savedAuth==='admin')  { isAdmin=true;  isAnr=false; showApp(); }
+else if (savedAuth==='viewer') { isAdmin=false; isAnr=false; showApp(); }
+else if (savedAuth==='anr')    { isAdmin=false; isAnr=true;  showApp(); }
 
 async function loadAll() { await Promise.all([loadRoster(), loadSnapshots()]); }
 
@@ -647,197 +631,92 @@ async function loadRoster() {
   try { const res=await fetch('/api/roster'); const data=await res.json(); roster=data.roster||[]; renderRoster(); updateLastUpdated(); }
   catch(e) { roster=[]; renderRoster(); }
 }
-
 async function loadSnapshots() {
   try { const res=await fetch('/api/snapshots'); const data=await res.json(); snapshots=data.snapshots||[]; buildWeekWindows(); renderRoster(); updateLastUpdated(); }
   catch(e) { snapshots=[]; }
 }
-
 async function loadAnrAll() { await Promise.all([loadAnrRoster(), loadAnrSnapshots(), loadAnrLastRefreshed()]); }
-
 async function loadAnrRoster() {
   try { const res=await fetch('/api/anr-roster'); const data=await res.json(); anrRoster=data.roster||[]; renderAnrRoster(); }
   catch(e) { anrRoster=[]; renderAnrRoster(); }
 }
-
 async function loadAnrSnapshots() {
   try { const res=await fetch('/api/anr-snapshots'); const data=await res.json(); anrSnapshots=data.snapshots||[]; renderAnrRoster(); }
   catch(e) { anrSnapshots=[]; }
 }
-
 async function loadAnrLastRefreshed() {
   try {
-    const res = await fetch('/api/anr-status');
-    const data = await res.json();
-    const el = document.getElementById('anr-last-updated');
+    const res=await fetch('/api/anr-status'); const data=await res.json();
+    const el=document.getElementById('anr-last-updated');
     if (data.lastRefreshed) {
-      const d = new Date(data.lastRefreshed);
-      if (!isNaN(d.getTime())) {
-        el.textContent = `Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
-      } else { el.textContent = ''; }
-    } else { el.textContent = ''; }
-    if(document.getElementById('view-anr').style.display !== 'none') {
-      document.getElementById('last-updated').textContent = el.textContent;
-    }
-  } catch(e) {}
+      const d=new Date(data.lastRefreshed);
+      if (!isNaN(d.getTime())) el.textContent=`Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
+      else el.textContent='';
+    } else el.textContent='';
+    if (document.getElementById('view-anr').style.display!=='none') document.getElementById('last-updated').textContent=el.textContent;
+  } catch(e){}
 }
 
 function updateLastUpdated() {
   const el=document.getElementById('last-updated');
   const timestamps=roster.filter(r=>r.updatedAt).map(r=>Number(r.updatedAt)).filter(t=>!isNaN(t));
-  if(timestamps.length){
-    const d=new Date(Math.max(...timestamps));
-    if(!isNaN(d.getTime())){
-      el.textContent=`Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
-      return;
-    }
-  }
-  if(snapshots.length){
-    const lastSnap=snapshots[snapshots.length-1];
-    const ts=lastSnap.ts||new Date(lastSnap.date).getTime();
-    const d=new Date(ts);
-    if(!isNaN(d.getTime())){
-      el.textContent=`Last snapshot: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
-      return;
-    }
-  }
+  if(timestamps.length){ const d=new Date(Math.max(...timestamps)); if(!isNaN(d.getTime())){ el.textContent=`Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`; return; } }
+  if(snapshots.length){ const s=snapshots[snapshots.length-1]; const d=new Date(s.ts||new Date(s.date).getTime()); if(!isNaN(d.getTime())){ el.textContent=`Last snapshot: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`; return; } }
   el.textContent='';
 }
 
 async function persistRoster() {
   const ind=document.getElementById('saving-indicator'); ind.style.display='inline';
-  try { await fetch('/api/roster',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({roster})}); } catch(e) {}
+  try { await fetch('/api/roster',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({roster})}); } catch(e){}
   ind.style.display='none';
 }
-
 async function persistSnapshots() {
-  try { await fetch('/api/snapshots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snapshots})}); } catch(e) {}
+  try { await fetch('/api/snapshots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snapshots})}); } catch(e){}
 }
-
 async function persistAnrRoster() {
   const ind=document.getElementById('anr-saving-indicator'); ind.style.display='inline';
   try {
-    const res = await fetch('/api/anr-roster',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({roster:anrRoster})});
-    if(!res.ok) { const err = await res.json(); console.error('Save failed:', err); document.getElementById('anr-csv-status').textContent = `⚠️ Save failed: ${err.error||res.status}`; }
-  } catch(e) { console.error('Save error:', e); document.getElementById('anr-csv-status').textContent = `⚠️ Save error: ${e.message}`; }
+    const res=await fetch('/api/anr-roster',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({roster:anrRoster})});
+    if(!res.ok){ const err=await res.json(); document.getElementById('anr-csv-status').textContent=`⚠️ Save failed: ${err.error||res.status}`; }
+  } catch(e){ document.getElementById('anr-csv-status').textContent=`⚠️ Save error: ${e.message}`; }
   ind.style.display='none';
 }
-
 async function persistAnrSnapshots() {
-  try { await fetch('/api/anr-snapshots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snapshots:anrSnapshots})}); } catch(e) {}
-}
-
-function setPeriod(days) {
-  currentPeriod = days;
-  customRange = null;
-  updateCustomBtn('main');
-  document.querySelectorAll('#view-live .period-tab').forEach(el => el.classList.remove('active'));
-  const map={1:'period-1',7:'period-7',14:'period-14',30:'period-30'};
-  const el=document.getElementById(map[days]); if(el) el.classList.add('active');
-  renderRoster();
-}
-
-function setAnrPeriod(days) {
-  anrCurrentPeriod = days;
-  anrCustomRange = null;
-  updateCustomBtn('anr');
-  ['anr-period-1','anr-period-7','anr-period-14','anr-period-30'].forEach(id=>{ const el=document.getElementById(id); if(el) el.classList.remove('active'); });
-  const map={1:'anr-period-1',7:'anr-period-7',14:'anr-period-14',30:'anr-period-30'};
-  const el=document.getElementById(map[days]); if(el) el.classList.add('active');
-  renderAnrRoster();
+  try { await fetch('/api/anr-snapshots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snapshots:anrSnapshots})}); } catch(e){}
 }
 
 function getMondayOf(ts) {
-  const d = new Date(ts);
-  const day = d.getDay();
-  const diff = (day === 0) ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
-function fmtShort(ts) {
-  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const d=new Date(ts); const day=d.getDay(); const diff=(day===0)?-6:1-day;
+  d.setDate(d.getDate()+diff); d.setHours(0,0,0,0); return d.getTime();
 }
 
 function buildWeekWindows() {
-  if (!snapshots.length) { weekWindows = []; currentWeekIdx = -1; return; }
-  const firstTs = snapTs(snapshots[0]);
-  const lastTs = snapTs(snapshots[snapshots.length - 1]);
-  let mondayTs = getMondayOf(firstTs);
-  const windows = [];
-  while (mondayTs <= lastTs) {
-    const sundayTs = mondayTs + 6 * DAY_MS;
-    const sundayEnd = sundayTs + DAY_MS - 1;
-    const inWeek = snapshots.filter(s => snapTs(s) >= mondayTs && snapTs(s) <= sundayEnd);
-    if (inWeek.length) {
-      const before = snapshots.filter(s => snapTs(s) < mondayTs);
-      const startSnap = before.length ? before[before.length - 1] : inWeek.length > 1 ? inWeek[0] : null;
-      const endSnap = inWeek[inWeek.length - 1];
-      windows.push({ mondayTs, sundayTs, startSnap, endSnap });
+  if(!snapshots.length){weekWindows=[];currentWeekIdx=-1;return;}
+  const firstTs=snapTs(snapshots[0]), lastTs=snapTs(snapshots[snapshots.length-1]);
+  let mondayTs=getMondayOf(firstTs); const windows=[];
+  while(mondayTs<=lastTs){
+    const sundayTs=mondayTs+6*DAY_MS, sundayEnd=sundayTs+DAY_MS-1;
+    const inWeek=snapshots.filter(s=>snapTs(s)>=mondayTs&&snapTs(s)<=sundayEnd);
+    if(inWeek.length){
+      const before=snapshots.filter(s=>snapTs(s)<mondayTs);
+      const startSnap=before.length?before[before.length-1]:inWeek.length>1?inWeek[0]:null;
+      windows.push({mondayTs,sundayTs,startSnap,endSnap:inWeek[inWeek.length-1]});
     }
-    mondayTs += 7 * DAY_MS;
+    mondayTs+=7*DAY_MS;
   }
-  weekWindows = windows;
-  currentWeekIdx = weekWindows.length - 1;
+  weekWindows=windows; currentWeekIdx=weekWindows.length-1;
 }
 
 function stepWeek(dir) {
-  const newIdx = currentWeekIdx + dir;
-  if (newIdx < 0 || newIdx >= weekWindows.length) return;
-  currentWeekIdx = newIdx;
-  renderReport();
+  const n=currentWeekIdx+dir;
+  if(n<0||n>=weekWindows.length)return;
+  currentWeekIdx=n; renderReport();
 }
 
-function getSnapVal(handle){
-  if(!snapshots.length) return null;
-  const latest=snapshots[snapshots.length-1];
-  const cutoff=snapTs(latest)-(currentPeriod*DAY_MS);
-  let prev=null;
-  for(let i=snapshots.length-2;i>=0;i--){
-    const snap=snapshots[i];
-    const entry=snap.data.find(d=>d.handle===handle);
-    if(!entry) continue;
-    if(snapTs(snap)<=cutoff){prev=snap;break;}
-    prev=snap;
-  }
-  if(!prev) return null;
-  const e=prev.data.find(d=>d.handle===handle);
-  return e?e.followers:null;
-}
-
-function getAnrSnapshotPair() {
-  if(!anrSnapshots.length) return null;
-  const latest=anrSnapshots[anrSnapshots.length-1];
-  const cutoff=(new Date(latest.date).getTime()||Date.now())-(anrCurrentPeriod*DAY_MS);
-  let best=null;
-  for(let i=anrSnapshots.length-2;i>=0;i--){
-    const t=new Date(anrSnapshots[i].date).getTime();
-    if(t<=cutoff){best=anrSnapshots[i];break;}
-    best=anrSnapshots[i];
-  }
-  return{latest,prev:best};
-}
-
-function fmt(n){if(n==null)return '—';if(n>=1000000)return (n/1000000).toFixed(2)+'M';if(n>=1000)return (n/1000).toFixed(1)+'K';return Number(n).toLocaleString();}
+function fmt(n){if(n==null)return'—';if(n>=1000000)return(n/1000000).toFixed(2)+'M';if(n>=1000)return(n/1000).toFixed(1)+'K';return Number(n).toLocaleString();}
 function pct(cur,prev){if(!prev)return null;return(cur-prev)/prev*100;}
-function renderPct(p){if(p===null)return '<span class="muted">—</span>';const sign=p>0?'+':'',cls=p>0?'up':p<0?'down':'muted',arrow=p>0?'▲':p<0?'▼':'–';return `<span class="${cls}">${arrow} ${sign}${p.toFixed(2)}%</span>`;}
-function renderGrowth(diff){if(diff===null)return '<span class="muted">—</span>';const cls=diff>0?'up':diff<0?'down':'muted',sign=diff>0?'+':'';return `<span class="${cls}">${sign}${Number(diff).toLocaleString()}</span>`;}
-
-function getAnrSnapVal(handle){
-  const pair=getAnrSnapshotPair(); if(!pair) return null;
-  const e=pair.prev?pair.prev.data.find(d=>d.handle===handle):null;
-  return e?e.followers:null;
-}
-
-function switchRosterTab(tab){
-  currentRosterTab=tab;
-  document.querySelectorAll('.roster-tab').forEach(el=>{
-    const elTab=el.getAttribute('onclick').includes("'all'") ? 'all' : 'my';
-    el.classList.toggle('active', elTab===tab);
-  });
-  renderRoster();
-}
+function renderPct(p){if(p===null)return'<span class="muted">—</span>';const sign=p>0?'+':'',cls=p>0?'up':p<0?'down':'muted',arrow=p>0?'▲':p<0?'▼':'–';return`<span class="${cls}">${arrow} ${sign}${p.toFixed(2)}%</span>`;}
+function renderGrowth(diff){if(diff===null)return'<span class="muted">—</span>';const cls=diff>0?'up':diff<0?'down':'muted',sign=diff>0?'+':'';return`<span class="${cls}">${sign}${Number(diff).toLocaleString()}</span>`;}
 
 function sortBy(field){
   if(currentSort.field===field){currentSort.dir=currentSort.dir==='desc'?'asc':'desc';}
@@ -857,26 +736,26 @@ function sortAnrBy(field){
   renderAnrRoster();
 }
 
+function switchRosterTab(tab){
+  currentRosterTab=tab;
+  document.querySelectorAll('.roster-tab').forEach(el=>{
+    el.classList.toggle('active', el.getAttribute('onclick').includes(`'${tab}'`));
+  });
+  renderRoster();
+}
+
 function getSortedRoster(filterStarred=false){
   let list=[...roster].map((r,i)=>{
-    let displayFollowers, diff, p;
-    if (customRange) {
-      const pair = getCustomSnapPair(r.handle);
-      displayFollowers = pair.current;
-      diff = (pair.current != null && pair.prev != null) ? pair.current - pair.prev : null;
-      p    = (pair.current != null && pair.prev != null) ? pct(pair.current, pair.prev) : null;
-    } else {
-      displayFollowers = r.followers;
-      const prev = getSnapVal(r.handle);
-      diff = (r.followers != null && prev != null) ? r.followers - prev : null;
-      p    = (r.followers != null && prev != null) ? pct(r.followers, prev) : null;
-    }
-    return{...r,_origIndex:i,_displayFollowers:displayFollowers,_diff:diff,_pct:p};
+    const pair=getSnapPairForRange(r.handle, mainRange, snapshots);
+    const cur=pair.cur??r.followers;
+    const diff=(cur!=null&&pair.prev!=null)?cur-pair.prev:null;
+    const p=(cur!=null&&pair.prev!=null)?pct(cur,pair.prev):null;
+    return{...r,_origIndex:i,_cur:cur,_diff:diff,_pct:p};
   });
   if(filterStarred) list=list.filter(r=>starred.has(r.handle));
   return list.sort((a,b)=>{
     let av,bv;
-    if(currentSort.field==='followers'){av=a._displayFollowers??a.followers??0;bv=b._displayFollowers??b.followers??0;}
+    if(currentSort.field==='followers'){av=a._cur??a.followers??0;bv=b._cur??b.followers??0;}
     else if(currentSort.field==='growth'){av=a._diff??-Infinity;bv=b._diff??-Infinity;}
     else if(currentSort.field==='pct'){av=a._pct??-Infinity;bv=b._pct??-Infinity;}
     else{av=a.handle||'';bv=b.handle||'';}
@@ -888,23 +767,15 @@ function getSortedRoster(filterStarred=false){
 
 function getSortedAnrRoster(){
   let list=[...anrRoster].map((r,i)=>{
-    let displayFollowers, diff, p;
-    if (anrCustomRange) {
-      const pair = getAnrCustomSnapPair(r.handle);
-      displayFollowers = pair.current;
-      diff = (pair.current != null && pair.prev != null) ? pair.current - pair.prev : null;
-      p    = (pair.current != null && pair.prev != null) ? pct(pair.current, pair.prev) : null;
-    } else {
-      displayFollowers = r.followers;
-      const prev = getAnrSnapVal(r.handle);
-      diff = (r.followers != null && prev != null) ? r.followers - prev : null;
-      p    = (r.followers != null && prev != null) ? pct(r.followers, prev) : null;
-    }
-    return{...r,_origIndex:i,_displayFollowers:displayFollowers,_diff:diff,_pct:p};
+    const pair=getSnapPairForRange(r.handle, anrRange, anrSnapshots);
+    const cur=pair.cur??r.followers;
+    const diff=(cur!=null&&pair.prev!=null)?cur-pair.prev:null;
+    const p=(cur!=null&&pair.prev!=null)?pct(cur,pair.prev):null;
+    return{...r,_origIndex:i,_cur:cur,_diff:diff,_pct:p};
   });
   return list.sort((a,b)=>{
     let av,bv;
-    if(anrCurrentSort.field==='followers'){av=a._displayFollowers??a.followers??0;bv=b._displayFollowers??b.followers??0;}
+    if(anrCurrentSort.field==='followers'){av=a._cur??a.followers??0;bv=b._cur??b.followers??0;}
     else if(anrCurrentSort.field==='growth'){av=a._diff??-Infinity;bv=b._diff??-Infinity;}
     else if(anrCurrentSort.field==='pct'){av=a._pct??-Infinity;bv=b._pct??-Infinity;}
     else{av=a.handle||'';bv=b.handle||'';}
@@ -921,14 +792,10 @@ function renderRoster(){
   if(isMyRoster&&sorted.length===0){tbody.innerHTML=`<tr><td colspan="${cols}" style="padding:12px 0;font-size:13px;color:#aaa;">No starred artists yet — click ☆ next to any artist to add them here.</td></tr>`;return;}
   tbody.innerHTML=sorted.map((r,rankIdx)=>{
     const i=r._origIndex;
-    let fc;
-    if (customRange) {
-      fc = r._displayFollowers != null ? `<strong>${fmt(r._displayFollowers)}</strong>` : '<span class="muted">—</span>';
-    } else {
-      fc = r.status==='loading' ? '<span class="muted">fetching...</span>'
-         : r.status==='error'   ? `<span class="pill-err">error</span> <button style="font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid #ddd;background:#fff;cursor:pointer;" onclick="retryHandle(${i})">↻</button>`
-         : `<strong>${fmt(r.followers)}</strong>`;
-    }
+    const displayFollowers=r._cur??r.followers;
+    const fc=r.status==='loading'?'<span class="muted">fetching...</span>'
+      :r.status==='error'?`<span class="pill-err">error</span> <button style="font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid #ddd;background:#fff;cursor:pointer;" onclick="retryHandle(${i})">↻</button>`
+      :`<strong>${fmt(displayFollowers)}</strong>`;
     const igUrl=`https://www.instagram.com/${r.handle}/`;
     const isStarred=starred.has(r.handle);
     const picUrl=r.profilePic?proxyUrl(r.profilePic):'';
@@ -944,22 +811,16 @@ function renderAnrRoster(){
   const sorted=getSortedAnrRoster();
   tbody.innerHTML=sorted.map((r,rankIdx)=>{
     const i=r._origIndex;
-    let fc;
-    if (anrCustomRange) {
-      fc = r._displayFollowers != null ? `<strong>${fmt(r._displayFollowers)}</strong>` : '<span class="muted">—</span>';
-    } else {
-      fc = r.status==='loading' ? '<span class="muted">fetching...</span>'
-         : r.status==='error'   ? '<span class="pill-err">error</span>'
-         : `<strong>${fmt(r.followers)}</strong>`;
-    }
+    const displayFollowers=r._cur??r.followers;
+    const fc=r.status==='loading'?'<span class="muted">fetching...</span>'
+      :r.status==='error'?'<span class="pill-err">error</span>'
+      :`<strong>${fmt(displayFollowers)}</strong>`;
     const igUrl=`https://www.instagram.com/${r.handle}/`;
     const picUrl=r.profilePic?proxyUrl(r.profilePic):'';
     const avatarHtml=picUrl?`<img src="${picUrl}" class="avatar" alt="" onerror="this.outerHTML='<span class=\\'avatar-placeholder\\'></span>'" />`:`<span class="avatar-placeholder"></span>`;
-    const alertEmoji = r._pct >= 4.5 ? '🚨 ' : '';
-    const genre=r.genre||'';
-    const note=r.note||'';
-    const genreHtml=`<span class="genre-pill" onclick="editAnrGenre(${i})" title="Click to edit">${genre||'+ genre'}</span>`;
-    const noteHtml=`<span class="note-pill" onclick="editAnrNote(${i})" title="${note||'Click to add note'}">${note||'+ note'}</span>`;
+    const alertEmoji=r._pct>=4.5?'🚨 ':'';
+    const genreHtml=`<span class="genre-pill" onclick="editAnrGenre(${i})" title="Click to edit">${r.genre||'+ genre'}</span>`;
+    const noteHtml=`<span class="note-pill" onclick="editAnrNote(${i})" title="${r.note||'Click to add note'}">${r.note||'+ note'}</span>`;
     return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${alertEmoji}${r.handle}</a></div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td><td>${genreHtml}</td><td>${noteHtml}</td><td style="text-align:right"><button class="danger" onclick="anrRemoveHandle(${i})">✕</button></td></tr>`;
   }).join('');
 }
@@ -975,38 +836,24 @@ function editAnrGenre(i){
     opt.style.cssText=`padding:7px 14px;font-size:13px;cursor:pointer;color:#1a1a1a;${g===current?'font-weight:600;background:#f5f5f5;':''}`;
     opt.onmouseenter=()=>opt.style.background='#f5f5f5';
     opt.onmouseleave=()=>opt.style.background=g===current?'#f5f5f5':'';
-    opt.onclick=()=>{ anrRoster[i].genre=g; renderAnrRoster(); persistAnrRoster(); document.body.removeChild(menu); };
+    opt.onclick=()=>{anrRoster[i].genre=g;renderAnrRoster();persistAnrRoster();document.body.removeChild(menu);};
     menu.appendChild(opt);
   });
-  const divider=document.createElement('div');
-  divider.style.cssText='height:1px;background:#eee;margin:4px 0;';
-  menu.appendChild(divider);
-  const custom=document.createElement('div');
-  custom.textContent='Custom...';
-  custom.style.cssText='padding:7px 14px;font-size:13px;cursor:pointer;color:#888;';
-  custom.onmouseenter=()=>custom.style.background='#f5f5f5';
-  custom.onmouseleave=()=>custom.style.background='';
-  custom.onclick=()=>{
-    document.body.removeChild(menu);
-    const val=prompt('Enter genre:',current);
-    if(val===null) return;
-    anrRoster[i].genre=val.trim();
-    renderAnrRoster(); persistAnrRoster();
-  };
-  menu.appendChild(custom);
-  const close=()=>{ if(document.body.contains(menu)) document.body.removeChild(menu); };
+  const div=document.createElement('div'); div.style.cssText='height:1px;background:#eee;margin:4px 0;'; menu.appendChild(div);
+  const cust=document.createElement('div'); cust.textContent='Custom...'; cust.style.cssText='padding:7px 14px;font-size:13px;cursor:pointer;color:#888;';
+  cust.onmouseenter=()=>cust.style.background='#f5f5f5'; cust.onmouseleave=()=>cust.style.background='';
+  cust.onclick=()=>{document.body.removeChild(menu);const val=prompt('Enter genre:',current);if(val===null)return;anrRoster[i].genre=val.trim();renderAnrRoster();persistAnrRoster();};
+  menu.appendChild(cust);
+  const close=()=>{if(document.body.contains(menu))document.body.removeChild(menu);};
   document.body.appendChild(menu);
-  const pill=event.target;
-  const rect=pill.getBoundingClientRect();
-  menu.style.top=(rect.bottom+6)+'px';
-  menu.style.left=rect.left+'px';
+  const rect=event.target.getBoundingClientRect();
+  menu.style.top=(rect.bottom+6)+'px'; menu.style.left=rect.left+'px';
   setTimeout(()=>document.addEventListener('click',close,{once:true}),0);
 }
 
 function editAnrNote(i){
-  const current=anrRoster[i].note||'';
-  const val=prompt('Note:',current);
-  if(val===null) return;
+  const val=prompt('Note:',anrRoster[i].note||'');
+  if(val===null)return;
   anrRoster[i].note=val.trim();
   renderAnrRoster(); persistAnrRoster();
 }
@@ -1014,13 +861,13 @@ function editAnrNote(i){
 async function fetchFollowers(handle){
   const res=await fetch(`/api/followers?username=${encodeURIComponent(handle)}`);
   if(!res.ok) throw new Error(`Server error ${res.status}`);
-  const data=await res.json();if(data.error)throw new Error(data.error);
+  const data=await res.json(); if(data.error)throw new Error(data.error);
   if(data.follower_count==null)throw new Error('No count returned');
   return{follower_count:data.follower_count,profile_pic_url:data.profile_pic_url||''};
 }
 
-function showErr(msg){const el=document.getElementById('err-box');el.textContent=msg;el.style.display='block';setTimeout(()=>{el.style.display='none';},7000);}
-function showAnrErr(msg){const el=document.getElementById('anr-err-box');el.textContent=msg;el.style.display='block';setTimeout(()=>{el.style.display='none';},7000);}
+function showErr(msg){const el=document.getElementById('err-box');el.textContent=msg;el.style.display='block';setTimeout(()=>el.style.display='none',7000);}
+function showAnrErr(msg){const el=document.getElementById('anr-err-box');el.textContent=msg;el.style.display='block';setTimeout(()=>el.style.display='none',7000);}
 
 async function addHandle(){
   const input=document.getElementById('add-input'),handle=input.value.trim().replace('@','').toLowerCase();
@@ -1047,30 +894,26 @@ async function anrAddHandle(){
 }
 
 async function anrImportCSV(event){
-  const file=event.target.files[0]; if(!file) return;
+  const file=event.target.files[0];if(!file)return;
   const statusEl=document.getElementById('anr-csv-status');
   statusEl.textContent='Reading...';
   const text=await file.text();
   const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
   const handles=[];
   for(const line of lines){
-    const cols=line.split(',');
-    const raw=cols[0].replace(/@/g,'').replace(/"/g,'').replace(/,/g,'').trim().toLowerCase();
-    if(raw&&raw!=='handle'&&raw!=='username'&&raw!=='account') handles.push(raw);
+    const raw=line.split(',')[0].replace(/@/g,'').replace(/"/g,'').trim().toLowerCase();
+    if(raw&&raw!=='handle'&&raw!=='username'&&raw!=='account')handles.push(raw);
   }
   const newHandles=handles.filter(h=>!anrRoster.find(r=>r.handle===h));
-  const total=newHandles.length;
-  let added=0;
+  const total=newHandles.length; let added=0;
   for(const handle of newHandles){
     const entry={handle,followers:null,status:'loading',profilePic:'',genre:'',note:''};
-    anrRoster.push(entry); renderAnrRoster();
+    anrRoster.push(entry);renderAnrRoster();
     try{const result=await fetchFollowers(handle);entry.followers=result.follower_count;entry.profilePic=result.profile_pic_url;entry.status='ok';entry.updatedAt=Date.now();}
     catch(e){entry.status='error';}
     added++;
     statusEl.textContent=`⏳ Importing ${added} of ${total} — do not close this tab...`;
-    renderAnrRoster();
-    await persistAnrRoster();
-    await sleep(1100);
+    renderAnrRoster();await persistAnrRoster();await sleep(1100);
   }
   statusEl.textContent=`✅ Done! ${added} of ${total} imported and saved.`;
   event.target.value='';
@@ -1078,17 +921,13 @@ async function anrImportCSV(event){
 
 async function removeHandle(i){roster.splice(i,1);renderRoster();await persistRoster();}
 async function anrRemoveHandle(i){anrRoster.splice(i,1);renderAnrRoster();await persistAnrRoster();}
-async function retryHandle(i) {
-  const r = roster[i];
-  if (!r) return;
-  r.status = 'loading'; renderRoster();
-  try {
-    const result = await fetchFollowers(r.handle);
-    r.followers = result.follower_count;
-    if (result.profile_pic_url) r.profilePic = result.profile_pic_url;
-    r.status = 'ok'; r.updatedAt = Date.now();
-  } catch(e) { r.status = 'error'; }
-  renderRoster(); updateLastUpdated(); await persistRoster();
+
+async function retryHandle(i){
+  const r=roster[i];if(!r)return;
+  r.status='loading';renderRoster();
+  try{const result=await fetchFollowers(r.handle);r.followers=result.follower_count;if(result.profile_pic_url)r.profilePic=result.profile_pic_url;r.status='ok';r.updatedAt=Date.now();}
+  catch(e){r.status='error';}
+  renderRoster();updateLastUpdated();await persistRoster();
 }
 
 async function refreshAll(){
@@ -1103,8 +942,7 @@ async function refreshAll(){
     if(idx<total-1)await sleep(1100);
   }
   pb.style.display='none';btn.disabled=false;btn.textContent='↻ Refresh all';
-  updateLastUpdated();await persistRoster();
-  await saveSnapshot(true);
+  updateLastUpdated();await persistRoster();await saveSnapshot(true);
 }
 
 async function anrRefreshAll(){
@@ -1119,68 +957,45 @@ async function anrRefreshAll(){
     if(idx<total-1)await sleep(1100);
   }
   pb.style.display='none';btn.disabled=false;btn.textContent='↻ Refresh all';
-  await persistAnrRoster();
-  await saveAnrSnapshot(true);
-  await loadAnrLastRefreshed();
+  await persistAnrRoster();await saveAnrSnapshot(true);await loadAnrLastRefreshed();
 }
 
 async function saveSnapshot(silent=false){
   const valid=roster.filter(r=>r.followers!=null);
   if(!valid.length){if(!silent)showErr('No data yet.');return;}
   const snap={date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),ts:Date.now(),data:valid.map(r=>({handle:r.handle,followers:r.followers}))};
-  snapshots.push(snap);
-  buildWeekWindows();
-  await persistSnapshots();
-  renderReport();
+  snapshots.push(snap);buildWeekWindows();await persistSnapshots();renderReport();
   if(!silent)alert('Snapshot saved — '+snap.date);
 }
 
 async function saveAnrSnapshot(silent=false){
-  const valid=anrRoster.filter(r=>r.followers!=null);
-  if(!valid.length) return;
+  const valid=anrRoster.filter(r=>r.followers!=null);if(!valid.length)return;
   const snap={date:new Date().toISOString(),type:'daily',data:valid.map(r=>({handle:r.handle,followers:r.followers}))};
-  anrSnapshots.push(snap);
-  if(anrSnapshots.length>120) anrSnapshots.splice(0,anrSnapshots.length-120);
+  anrSnapshots.push(snap);if(anrSnapshots.length>120)anrSnapshots.splice(0,anrSnapshots.length-120);
   await persistAnrSnapshots();
 }
 
-function getWeekSnapshotPair() {
-  if (!weekWindows.length || currentWeekIdx < 0) return null;
-  const w = weekWindows[currentWeekIdx];
-  return { latest: w.endSnap, prev: w.startSnap };
+function getWeekSnapshotPair(){
+  if(!weekWindows.length||currentWeekIdx<0)return null;
+  const w=weekWindows[currentWeekIdx];
+  return{latest:w.endSnap,prev:w.startSnap};
 }
 
 function renderReport(){
-  const tbody=document.getElementById('report-rows');
-  const dateEl=document.getElementById('report-date');
-  const prevBtn=document.getElementById('week-prev-btn');
-  const nextBtn=document.getElementById('week-next-btn');
-  if(!snapshots.length){
-    tbody.innerHTML='<tr><td colspan="5" class="muted" style="font-size:13px;padding:12px 0;">No snapshots yet.</td></tr>';
-    dateEl.textContent='';
-    if(prevBtn) prevBtn.disabled=true;
-    if(nextBtn) nextBtn.disabled=true;
-    return;
-  }
-  if(!weekWindows.length) buildWeekWindows();
-  if(currentWeekIdx < 0) currentWeekIdx = weekWindows.length - 1;
-  if(prevBtn) prevBtn.disabled = currentWeekIdx <= 0;
-  if(nextBtn) nextBtn.disabled = currentWeekIdx >= weekWindows.length - 1;
-  const pair = getWeekSnapshotPair();
-  if(!pair || !pair.latest){
-    tbody.innerHTML='<tr><td colspan="5" class="muted" style="font-size:13px;padding:12px 0;">No data for this week.</td></tr>';
-    dateEl.textContent=''; return;
-  }
-  const { latest, prev } = pair;
-  const w = weekWindows[currentWeekIdx];
-  const isCurrentWeek = currentWeekIdx === weekWindows.length - 1;
-  const nowTs = Date.now();
-  const weekEndDisplay = w.sundayTs > nowTs ? nowTs : w.sundayTs;
-  if (prev) {
-    dateEl.textContent = `${fmtShort(w.mondayTs)} – ${fmtShort(weekEndDisplay)}`;
-  } else {
-    dateEl.textContent = `${fmtShort(w.mondayTs)}${isCurrentWeek ? ' – today' : ''}`;
-  }
+  const tbody=document.getElementById('report-rows'),dateEl=document.getElementById('report-date');
+  const prevBtn=document.getElementById('week-prev-btn'),nextBtn=document.getElementById('week-next-btn');
+  if(!snapshots.length){tbody.innerHTML='<tr><td colspan="5" class="muted" style="font-size:13px;padding:12px 0;">No snapshots yet.</td></tr>';dateEl.textContent='';if(prevBtn)prevBtn.disabled=true;if(nextBtn)nextBtn.disabled=true;return;}
+  if(!weekWindows.length)buildWeekWindows();
+  if(currentWeekIdx<0)currentWeekIdx=weekWindows.length-1;
+  if(prevBtn)prevBtn.disabled=currentWeekIdx<=0;
+  if(nextBtn)nextBtn.disabled=currentWeekIdx>=weekWindows.length-1;
+  const pair=getWeekSnapshotPair();
+  if(!pair||!pair.latest){tbody.innerHTML='<tr><td colspan="5" class="muted" style="font-size:13px;padding:12px 0;">No data for this week.</td></tr>';dateEl.textContent='';return;}
+  const{latest,prev}=pair;
+  const w=weekWindows[currentWeekIdx];
+  const nowTs=Date.now();
+  const weekEndDisplay=w.sundayTs>nowTs?nowTs:w.sundayTs;
+  dateEl.textContent=prev?`${fmtShort(w.mondayTs)} – ${fmtShort(weekEndDisplay)}`:`${fmtShort(w.mondayTs)}${currentWeekIdx===weekWindows.length-1?' – today':''}`;
   const sorted=[...latest.data].map(d=>{
     const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
     const diff=pe?d.followers-pe.followers:null;
@@ -1191,19 +1006,18 @@ function renderReport(){
     const rEntry=roster.find(r=>r.handle===d.handle);
     const picUrl=rEntry?.profilePic?proxyUrl(rEntry.profilePic):'';
     const avatarHtml=picUrl?`<img src="${picUrl}" class="avatar" alt="" style="width:24px;height:24px;" onerror="this.style.display='none'" />`:'';
-    return `<tr><td style="color:#bbb;font-size:12px;">${idx+1}</td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="https://www.instagram.com/${d.handle}/" target="_blank">@${d.handle}</a></div></td><td><strong>${fmt(d.followers)}</strong></td><td>${d._diff!==null?renderGrowth(d._diff):'<span class="muted">first entry</span>'}</td><td>${d._diff!==null?renderPct(d._pct):'<span class="muted">—</span>'}</td></tr>`;
+    return`<tr><td style="color:#bbb;font-size:12px;">${idx+1}</td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="https://www.instagram.com/${d.handle}/" target="_blank">@${d.handle}</a></div></td><td><strong>${fmt(d.followers)}</strong></td><td>${d._diff!==null?renderGrowth(d._diff):'<span class="muted">first entry</span>'}</td><td>${d._diff!==null?renderPct(d._pct):'<span class="muted">—</span>'}</td></tr>`;
   }).join('');
 }
 
 function exportReport(){
   if(!snapshots.length){alert('No snapshot data yet.');return;}
-  const pair = getWeekSnapshotPair();
-  if(!pair || !pair.latest){alert('No data for this week.');return;}
-  const { latest, prev } = pair;
-  const w = weekWindows[currentWeekIdx];
-  const nowTs = Date.now();
-  const weekEndDisplay = w && w.sundayTs > nowTs ? nowTs : w?.sundayTs;
-  const label = w ? `${fmtShort(w.mondayTs)} – ${fmtShort(weekEndDisplay)}` : fmtShort(latest.ts);
+  const pair=getWeekSnapshotPair();if(!pair||!pair.latest){alert('No data for this week.');return;}
+  const{latest,prev}=pair;
+  const w=weekWindows[currentWeekIdx];
+  const nowTs=Date.now();
+  const weekEndDisplay=w&&w.sundayTs>nowTs?nowTs:w?.sundayTs;
+  const label=w?`${fmtShort(w.mondayTs)} – ${fmtShort(weekEndDisplay)}`:fmtShort(latest.ts);
   let txt=`Instagram Weekly Report — ${label}\n${'─'.repeat(44)}\n`;
   [...latest.data].sort((a,b)=>b.followers-a.followers).forEach((d,idx)=>{
     const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
@@ -1215,16 +1029,15 @@ function exportReport(){
   navigator.clipboard.writeText(txt).then(()=>alert('Copied!')).catch(()=>alert(txt));
 }
 
-function getFileDateStr(){const d=new Date();return `${d.toLocaleString('en-US',{month:'short'})}-${d.getDate()}-${d.getFullYear()}`;}
+function getFileDateStr(){const d=new Date();return`${d.toLocaleString('en-US',{month:'short'})}-${d.getDate()}-${d.getFullYear()}`;}
 
 function downloadCSV(){
-  const sorted=getSortedRoster(currentRosterTab==='my').sort((a,b)=>(b._diff??-Infinity)-(a._diff??-Infinity));
+  const sorted=getSortedRoster(currentRosterTab==='my');
   let csv='Rank,Handle,Followers,Follower Growth,Follower Growth %\n';
   sorted.forEach((r,idx)=>{
-    const followerVal = customRange ? r._displayFollowers : r.followers;
     const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';
     const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';
-    csv+=`${idx+1},@${r.handle},${followerVal!=null?followerVal:''},${growth},${growthPct}\n`;
+    csv+=`${idx+1},@${r.handle},${r._cur??r.followers??''},${growth},${growthPct}\n`;
   });
   const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
 }
@@ -1233,10 +1046,9 @@ function anrDownloadCSV(){
   const sorted=getSortedAnrRoster();
   let csv='Rank,Handle,Followers,Growth,Growth %,Genre,Notes\n';
   sorted.forEach((r,idx)=>{
-    const followerVal = anrCustomRange ? r._displayFollowers : r.followers;
     const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';
     const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';
-    csv+=`${idx+1},@${r.handle},${followerVal!=null?followerVal:''},${growth},${growthPct},"${r.genre||''}","${r.note||''}"\n`;
+    csv+=`${idx+1},@${r.handle},${r._cur??r.followers??''},${growth},${growthPct},"${r.genre||''}","${r.note||''}"\n`;
   });
   const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Alamo-ANR-Report-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
 }
@@ -1249,10 +1061,9 @@ function downloadPDF(){
   doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(120);
   doc.text(`Alamo Records / Santa Anna Roster — ${today}`,14,28);doc.setTextColor(0);
   const tableData=sorted.map((r,idx)=>{
-    const followerVal = customRange ? r._displayFollowers : r.followers;
     const growth=r._diff!==null?(r._diff>=0?'+':'')+Number(r._diff).toLocaleString():'—';
     const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'—';
-    return[idx+1,`@${r.handle}`,fmt(followerVal),growth,growthPct];
+    return[idx+1,`@${r.handle}`,fmt(r._cur??r.followers),growth,growthPct];
   });
   doc.autoTable({startY:34,head:[['#','Handle','Followers','Follower Growth','Follower Growth %']],body:tableData,styles:{fontSize:10,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:12},1:{cellWidth:60},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:40}}});
   doc.save(`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.pdf`);
@@ -1266,10 +1077,9 @@ function anrDownloadPDF(){
   doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(120);
   doc.text(`Alamo Records / Santa Anna — ${today}`,14,28);doc.setTextColor(0);
   const tableData=sorted.map((r,idx)=>{
-    const followerVal = anrCustomRange ? r._displayFollowers : r.followers;
     const growth=r._diff!==null?(r._diff>=0?'+':'')+Number(r._diff).toLocaleString():'—';
     const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'—';
-    return[idx+1,`@${r.handle}`,fmt(followerVal),growth,growthPct,r.genre||'',r.note||''];
+    return[idx+1,`@${r.handle}`,fmt(r._cur??r.followers),growth,growthPct,r.genre||'',r.note||''];
   });
   doc.autoTable({startY:34,head:[['#','Handle','Followers','Growth','Growth %','Genre','Notes']],body:tableData,styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:10},1:{cellWidth:50},2:{cellWidth:28},3:{cellWidth:25},4:{cellWidth:25},5:{cellWidth:25},6:{cellWidth:30}}});
   doc.save(`Alamo-ANR-Report-${getFileDateStr()}.pdf`);
@@ -1277,19 +1087,16 @@ function anrDownloadPDF(){
 
 function downloadReportPDF(){
   if(!snapshots.length){alert('No snapshot data yet.');return;}
-  const pair = getWeekSnapshotPair();
-  if(!pair || !pair.latest){alert('No data for this week.');return;}
-  const { latest, prev } = pair;
-  const w = weekWindows[currentWeekIdx];
-  const nowTs = Date.now();
-  const weekEndDisplay = w && w.sundayTs > nowTs ? nowTs : w?.sundayTs;
-  const label = w ? `${fmtShort(w.mondayTs)} – ${fmtShort(weekEndDisplay)}` : fmtShort(latest.ts);
+  const pair=getWeekSnapshotPair();if(!pair||!pair.latest){alert('No data for this week.');return;}
+  const{latest,prev}=pair;
+  const w=weekWindows[currentWeekIdx];
+  const nowTs=Date.now();
+  const weekEndDisplay=w&&w.sundayTs>nowTs?nowTs:w?.sundayTs;
+  const label=w?`${fmtShort(w.mondayTs)} – ${fmtShort(weekEndDisplay)}`:fmtShort(latest.ts);
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
   const sorted=[...latest.data].sort((a,b)=>b.followers-a.followers).map(d=>{
     const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
-    const diff=pe?d.followers-pe.followers:null;
-    const p=pe?pct(d.followers,pe.followers):null;
-    return{...d,_diff:diff,_pct:p};
+    return{...d,_diff:pe?d.followers-pe.followers:null,_pct:pe?pct(d.followers,pe.followers):null};
   });
   doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('Weekly Follower Report',14,20);
   doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(120);
@@ -1317,14 +1124,9 @@ function switchTab(tab){
     document.getElementById('last-updated').style.display='';
     if(!isAdmin&&!isAnr){
       document.getElementById('view-anr').innerHTML=`<div style="margin-top:3rem;text-align:center;color:#aaa;font-size:14px;">🔒 A&R access is restricted.<br><span style="font-size:12px;margin-top:6px;display:block;">Contact your admin for access.</span></div>`;
-    } else {
-      loadAnrLastRefreshed();
-      if(!anrRoster.length) loadAnrAll();
-    }
-  } else {
-    updateLastUpdated();
-  }
-  if(tab==='report') renderReport();
+    } else { loadAnrLastRefreshed(); if(!anrRoster.length)loadAnrAll(); }
+  } else { updateLastUpdated(); }
+  if(tab==='report')renderReport();
   closePicker();
 }
 
