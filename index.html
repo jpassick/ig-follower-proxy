@@ -94,15 +94,14 @@
   .picker-preset { padding: 6px 12px; border-radius: 6px; cursor: pointer; color: #444; font-size: 12px; white-space: nowrap; user-select: none; }
   .picker-preset:hover { background: #f5f5f5; }
   .picker-preset.picker-preset-active { background: #1a1a1a; color: #fff; }
-  .picker-cals { display: flex; gap: 16px; padding: 14px 16px 10px; }
-  .picker-month-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 4px; }
-  .picker-month-label { font-size: 11px; font-weight: 600; flex: 1; text-align: center; }
-  .picker-nav { background: none; border: 1px solid #eee; border-radius: 5px; padding: 1px 6px; font-size: 13px; color: #888; cursor: pointer; line-height: 1.5; }
+  .picker-cal-wrap { padding: 14px 16px 10px; }
+  .picker-month-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; }
+  .picker-month-label { font-size: 12px; font-weight: 600; flex: 1; text-align: center; }
+  .picker-nav { background: none; border: 1px solid #eee; border-radius: 5px; padding: 1px 8px; font-size: 14px; color: #888; cursor: pointer; line-height: 1.5; }
   .picker-nav:hover { background: #f0f0f0; color: #1a1a1a; border-color: #ccc; }
-  .picker-nav.picker-nav-hidden { visibility: hidden; pointer-events: none; }
-  .picker-weekdays { display: grid; grid-template-columns: repeat(7, 24px); text-align: center; font-size: 9px; color: #ccc; margin-bottom: 3px; }
-  .picker-days { display: grid; grid-template-columns: repeat(7, 24px); }
-  .picker-day { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11px; cursor: pointer; border-radius: 4px; color: #1a1a1a; user-select: none; }
+  .picker-weekdays { display: grid; grid-template-columns: repeat(7, 30px); text-align: center; font-size: 10px; color: #ccc; margin-bottom: 3px; }
+  .picker-days { display: grid; grid-template-columns: repeat(7, 30px); }
+  .picker-day { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; border-radius: 4px; color: #1a1a1a; user-select: none; }
   .picker-day:hover:not(.picker-empty) { background: #f0f0f0; }
   .picker-empty { cursor: default; pointer-events: none; }
   .picker-in-range { background: #f0f0f0 !important; border-radius: 0 !important; }
@@ -303,7 +302,7 @@ let mainRange = makeDefaultRange();
 let anrRange  = makeDefaultRange();
 
 let pickerOpen = false, pickerFor = null, pickerStart = null, pickerEnd = null;
-let pickerLeftYear, pickerLeftMonth;
+let pickerYear, pickerMonth;
 
 const PRESETS = [
   { key:'today',     label:'Today' },
@@ -327,13 +326,12 @@ function toEndOfDay(ts) { return toStartOfDay(ts) + DAY_MS - 1; }
 function fmtShortDate(ts) { return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
 function fmtShort(ts) { return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
 
-function initPickerMonths() {
+function initPickerMonth() {
   const now = new Date();
-  pickerLeftMonth = now.getMonth() - 2;
-  pickerLeftYear  = now.getFullYear();
-  while (pickerLeftMonth < 0) { pickerLeftMonth += 12; pickerLeftYear--; }
+  pickerMonth = now.getMonth();
+  pickerYear  = now.getFullYear();
 }
-initPickerMonths();
+initPickerMonth();
 
 function openPicker(forTab, btnEl) {
   if (pickerOpen && pickerFor === forTab) { closePicker(); return; }
@@ -346,7 +344,7 @@ function openPicker(forTab, btnEl) {
   } else {
     pickerStart = null; pickerEnd = null;
   }
-  if (active.type !== 'single' && active.type !== 'range') initPickerMonths();
+  if (active.type !== 'single' && active.type !== 'range') initPickerMonth();
   renderAndShowPicker(btnEl);
   pickerOpen = true;
 }
@@ -362,7 +360,7 @@ function renderAndShowPicker(anchorEl) {
   panel.style.display = 'block';
   const rect = anchorEl.getBoundingClientRect();
   const scrollY = window.scrollY || 0;
-  const panelW = 730;
+  const panelW = 420;
   let left = rect.left + (window.scrollX || 0);
   if (left + panelW > window.innerWidth - 8) left = window.innerWidth - panelW - 8;
   if (left < 8) left = 8;
@@ -376,18 +374,7 @@ function renderPicker() {
   panel.innerHTML = buildPickerHTML();
 }
 
-function addMonth(year, month, delta) {
-  month += delta;
-  while (month > 11) { month -= 12; year++; }
-  while (month < 0)  { month += 12; year--; }
-  return { year, month };
-}
-
 function buildPickerHTML() {
-  const m1 = { year: pickerLeftYear, month: pickerLeftMonth };
-  const m2 = addMonth(m1.year, m1.month, 1);
-  const m3 = addMonth(m1.year, m1.month, 2);
-
   const active = pickerFor === 'main' ? mainRange : anrRange;
   const activePresetKey = active.type === 'preset' ? active.key : null;
 
@@ -396,23 +383,19 @@ function buildPickerHTML() {
   ).join('');
 
   const hint = pickerStart && !pickerEnd
-    ? 'Click a second date to complete the range — or click the same date for a single day'
+    ? 'Now click an end date — or click the same date for a single day'
     : 'Click a start date';
 
   return `<div class="picker-inner">
     <div class="picker-sidebar">${sidebarHTML}</div>
     <div>
-      <div class="picker-cals">
-        ${buildCalMonth(m1.year, m1.month, 'left')}
-        ${buildCalMonth(m2.year, m2.month, 'mid')}
-        ${buildCalMonth(m3.year, m3.month, 'right')}
-      </div>
+      <div class="picker-cal-wrap">${buildCalMonth(pickerYear, pickerMonth)}</div>
       <div class="picker-hint">${hint}</div>
     </div>
   </div>`;
 }
 
-function buildCalMonth(year, month, side) {
+function buildCalMonth(year, month) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDow    = new Date(year, month, 1).getDay();
   const todayTs     = toStartOfDay(Date.now());
@@ -435,14 +418,11 @@ function buildCalMonth(year, month, side) {
     daysHTML += `<div class="${cls}" onclick="pickerClickDate(${ts}); event.stopPropagation();">${d}</div>`;
   }
 
-  const showLeft  = side === 'left';
-  const showRight = side === 'right';
-
   return `<div>
     <div class="picker-month-header">
-      <button class="picker-nav${showLeft ? '' : ' picker-nav-hidden'}" onclick="pickerNavMonth(-1); event.stopPropagation();">‹</button>
+      <button class="picker-nav" onclick="pickerNavMonth(-1); event.stopPropagation();">‹</button>
       <span class="picker-month-label">${MONTH_NAMES[month]} ${year}</span>
-      <button class="picker-nav${showRight ? '' : ' picker-nav-hidden'}" onclick="pickerNavMonth(1); event.stopPropagation();">›</button>
+      <button class="picker-nav" onclick="pickerNavMonth(1); event.stopPropagation();">›</button>
     </div>
     <div class="picker-weekdays"><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div>
     <div class="picker-days">${daysHTML}</div>
@@ -450,19 +430,23 @@ function buildCalMonth(year, month, side) {
 }
 
 function pickerNavMonth(dir) {
-  pickerLeftMonth += dir;
-  if (pickerLeftMonth > 11) { pickerLeftMonth = 0; pickerLeftYear++; }
-  if (pickerLeftMonth < 0)  { pickerLeftMonth = 11; pickerLeftYear--; }
+  pickerMonth += dir;
+  if (pickerMonth > 11) { pickerMonth = 0; pickerYear++; }
+  if (pickerMonth < 0)  { pickerMonth = 11; pickerYear--; }
   renderPicker();
 }
 
+// FIX: if a range is already fully set, first click resets to new start
 function pickerClickDate(ts) {
-  if (!pickerStart) {
+  if (!pickerStart || pickerEnd !== null) {
+    // Start fresh selection
     pickerStart = ts; pickerEnd = null;
     renderPicker();
   } else if (ts === pickerStart) {
+    // Same date twice = single day
     applyDateRange(ts, ts, true);
   } else {
+    // Complete the range
     applyDateRange(Math.min(pickerStart, ts), Math.max(pickerStart, ts), false);
   }
 }
