@@ -892,7 +892,7 @@ async function saveSnapshot(silent=false){
 async function saveAnrSnapshot(silent=false){
   const valid=anrRoster.filter(r=>r.followers!=null);if(!valid.length)return;
   const snap={date:new Date().toISOString(),type:'daily',data:valid.map(r=>({handle:r.handle,followers:r.followers}))};
-  anrSnapshots.push(snap);if(anrSnapshots.length>120)anrSnapshots.splice(0,anrSnapshots.length-120);
+  if(anrSnapshots.length>1095) anrSnapshots.splice(0,anrSnapshots.length-1095);
   await persistAnrSnapshots();
 }
 
