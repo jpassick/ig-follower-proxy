@@ -94,17 +94,17 @@
   .picker-preset { padding: 6px 12px; border-radius: 6px; cursor: pointer; color: #444; font-size: 12px; white-space: nowrap; user-select: none; }
   .picker-preset:hover { background: #f5f5f5; }
   .picker-preset.picker-preset-active { background: #1a1a1a; color: #fff; }
-  .picker-cals { display: flex; gap: 20px; padding: 14px 16px 10px; }
-  .picker-month-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; }
-  .picker-month-label { font-size: 12px; font-weight: 600; flex: 1; text-align: center; }
+  .picker-cals { display: flex; gap: 16px; padding: 14px 16px 10px; }
+  .picker-month-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 4px; }
+  .picker-month-label { font-size: 11px; font-weight: 600; flex: 1; text-align: center; }
   .picker-nav { background: none; border: 1px solid #eee; border-radius: 5px; padding: 1px 6px; font-size: 13px; color: #888; cursor: pointer; line-height: 1.5; }
   .picker-nav:hover { background: #f0f0f0; color: #1a1a1a; border-color: #ccc; }
   .picker-nav.picker-nav-hidden { visibility: hidden; pointer-events: none; }
-  .picker-weekdays { display: grid; grid-template-columns: repeat(7, 28px); text-align: center; font-size: 10px; color: #ccc; margin-bottom: 3px; }
-  .picker-days { display: grid; grid-template-columns: repeat(7, 28px); }
-  .picker-day { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; border-radius: 4px; color: #1a1a1a; user-select: none; }
+  .picker-weekdays { display: grid; grid-template-columns: repeat(7, 24px); text-align: center; font-size: 9px; color: #ccc; margin-bottom: 3px; }
+  .picker-days { display: grid; grid-template-columns: repeat(7, 24px); }
+  .picker-day { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11px; cursor: pointer; border-radius: 4px; color: #1a1a1a; user-select: none; }
   .picker-day:hover:not(.picker-empty) { background: #f0f0f0; }
-  .picker-empty { cursor: default; }
+  .picker-empty { cursor: default; pointer-events: none; }
   .picker-in-range { background: #f0f0f0 !important; border-radius: 0 !important; }
   .picker-range-start { background: #1a1a1a !important; color: #fff !important; border-radius: 4px 0 0 4px !important; }
   .picker-range-end { background: #1a1a1a !important; color: #fff !important; border-radius: 0 4px 4px 0 !important; }
@@ -302,7 +302,7 @@ function makeDefaultRange() {
 let mainRange = makeDefaultRange();
 let anrRange  = makeDefaultRange();
 
-let pickerOpen = false, pickerFor = null, pickerStart = null, pickerEnd = null, pickerHoverTs = null;
+let pickerOpen = false, pickerFor = null, pickerStart = null, pickerEnd = null;
 let pickerLeftYear, pickerLeftMonth;
 
 const PRESETS = [
@@ -329,9 +329,9 @@ function fmtShort(ts) { return new Date(ts).toLocaleDateString('en-US', { month:
 
 function initPickerMonths() {
   const now = new Date();
-  pickerLeftMonth = now.getMonth() - 1;
+  pickerLeftMonth = now.getMonth() - 2;
   pickerLeftYear  = now.getFullYear();
-  if (pickerLeftMonth < 0) { pickerLeftMonth = 11; pickerLeftYear--; }
+  while (pickerLeftMonth < 0) { pickerLeftMonth += 12; pickerLeftYear--; }
 }
 initPickerMonths();
 
@@ -346,7 +346,6 @@ function openPicker(forTab, btnEl) {
   } else {
     pickerStart = null; pickerEnd = null;
   }
-  pickerHoverTs = null;
   if (active.type !== 'single' && active.type !== 'range') initPickerMonths();
   renderAndShowPicker(btnEl);
   pickerOpen = true;
@@ -363,7 +362,7 @@ function renderAndShowPicker(anchorEl) {
   panel.style.display = 'block';
   const rect = anchorEl.getBoundingClientRect();
   const scrollY = window.scrollY || 0;
-  const panelW = 560;
+  const panelW = 730;
   let left = rect.left + (window.scrollX || 0);
   if (left + panelW > window.innerWidth - 8) left = window.innerWidth - panelW - 8;
   if (left < 8) left = 8;
@@ -377,23 +376,36 @@ function renderPicker() {
   panel.innerHTML = buildPickerHTML();
 }
 
+function addMonth(year, month, delta) {
+  month += delta;
+  while (month > 11) { month -= 12; year++; }
+  while (month < 0)  { month += 12; year--; }
+  return { year, month };
+}
+
 function buildPickerHTML() {
-  let rightMonth = pickerLeftMonth + 1, rightYear = pickerLeftYear;
-  if (rightMonth > 11) { rightMonth = 0; rightYear++; }
+  const m1 = { year: pickerLeftYear, month: pickerLeftMonth };
+  const m2 = addMonth(m1.year, m1.month, 1);
+  const m3 = addMonth(m1.year, m1.month, 2);
+
   const active = pickerFor === 'main' ? mainRange : anrRange;
   const activePresetKey = active.type === 'preset' ? active.key : null;
+
   const sidebarHTML = PRESETS.map(p =>
     `<div class="picker-preset${activePresetKey === p.key ? ' picker-preset-active' : ''}" onclick="applyPreset('${p.key}'); event.stopPropagation();">${p.label}</div>`
   ).join('');
+
   const hint = pickerStart && !pickerEnd
-    ? 'Click a second date to complete range, or same date for a single day'
-    : 'Click a date to select';
+    ? 'Click a second date to complete the range — or click the same date for a single day'
+    : 'Click a start date';
+
   return `<div class="picker-inner">
     <div class="picker-sidebar">${sidebarHTML}</div>
     <div>
       <div class="picker-cals">
-        ${buildCalMonth(pickerLeftYear, pickerLeftMonth, 'left')}
-        ${buildCalMonth(rightYear, rightMonth, 'right')}
+        ${buildCalMonth(m1.year, m1.month, 'left')}
+        ${buildCalMonth(m2.year, m2.month, 'mid')}
+        ${buildCalMonth(m3.year, m3.month, 'right')}
       </div>
       <div class="picker-hint">${hint}</div>
     </div>
@@ -404,11 +416,8 @@ function buildCalMonth(year, month, side) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDow    = new Date(year, month, 1).getDay();
   const todayTs     = toStartOfDay(Date.now());
-  let lo = pickerStart, hi = pickerEnd;
-  if (lo && !hi && pickerHoverTs && pickerHoverTs !== lo) {
-    if (pickerHoverTs > lo) { hi = pickerHoverTs; }
-    else { lo = pickerHoverTs; hi = pickerStart; }
-  }
+  const lo = pickerStart, hi = pickerEnd;
+
   let daysHTML = '';
   for (let i = 0; i < firstDow; i++) daysHTML += `<div class="picker-day picker-empty"></div>`;
   for (let d = 1; d <= daysInMonth; d++) {
@@ -423,13 +432,17 @@ function buildCalMonth(year, month, side) {
     } else if (lo && ts === lo) {
       cls += ' picker-range-start picker-range-end';
     }
-    daysHTML += `<div class="${cls}" onclick="pickerClickDate(${ts}); event.stopPropagation();" onmouseenter="pickerSetHover(${ts})" onmouseleave="pickerSetHover(null)">${d}</div>`;
+    daysHTML += `<div class="${cls}" onclick="pickerClickDate(${ts}); event.stopPropagation();">${d}</div>`;
   }
+
+  const showLeft  = side === 'left';
+  const showRight = side === 'right';
+
   return `<div>
     <div class="picker-month-header">
-      <button class="picker-nav${side==='right'?' picker-nav-hidden':''}" onclick="pickerNavMonth(-1); event.stopPropagation();">‹</button>
+      <button class="picker-nav${showLeft ? '' : ' picker-nav-hidden'}" onclick="pickerNavMonth(-1); event.stopPropagation();">‹</button>
       <span class="picker-month-label">${MONTH_NAMES[month]} ${year}</span>
-      <button class="picker-nav${side==='left'?' picker-nav-hidden':''}" onclick="pickerNavMonth(1); event.stopPropagation();">›</button>
+      <button class="picker-nav${showRight ? '' : ' picker-nav-hidden'}" onclick="pickerNavMonth(1); event.stopPropagation();">›</button>
     </div>
     <div class="picker-weekdays"><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div>
     <div class="picker-days">${daysHTML}</div>
@@ -443,14 +456,9 @@ function pickerNavMonth(dir) {
   renderPicker();
 }
 
-function pickerSetHover(ts) {
-  pickerHoverTs = ts;
-  if (pickerStart && !pickerEnd) renderPicker();
-}
-
 function pickerClickDate(ts) {
   if (!pickerStart) {
-    pickerStart = ts; pickerEnd = null; pickerHoverTs = null;
+    pickerStart = ts; pickerEnd = null;
     renderPicker();
   } else if (ts === pickerStart) {
     applyDateRange(ts, ts, true);
@@ -460,12 +468,9 @@ function pickerClickDate(ts) {
 }
 
 function applyDateRange(startTs, endTs, isSingleDay) {
-  let range;
-  if (isSingleDay) {
-    range = { type: 'single', label: fmtShortDate(startTs), ts: startTs, startTs, endTs: toEndOfDay(startTs) };
-  } else {
-    range = { type: 'range', label: `${fmtShortDate(startTs)} – ${fmtShortDate(endTs)}`, startTs, endTs: toEndOfDay(endTs) };
-  }
+  const range = isSingleDay
+    ? { type: 'single', label: fmtShortDate(startTs), ts: startTs, startTs, endTs: toEndOfDay(startTs) }
+    : { type: 'range',  label: `${fmtShortDate(startTs)} – ${fmtShortDate(endTs)}`, startTs, endTs: toEndOfDay(endTs) };
   setActiveRange(range);
 }
 
@@ -573,7 +578,6 @@ else if (savedAuth==='viewer') { isAdmin=false; isAnr=false; showApp(); }
 else if (savedAuth==='anr')    { isAdmin=false; isAnr=true;  showApp(); }
 
 async function loadAll() { await Promise.all([loadRoster(), loadSnapshots()]); }
-
 async function loadRoster() {
   try { const res=await fetch('/api/roster'); const data=await res.json(); roster=data.roster||[]; renderRoster(); updateLastUpdated(); }
   catch(e) { roster=[]; renderRoster(); }
@@ -636,7 +640,6 @@ function getMondayOf(ts) {
   const d=new Date(ts); const day=d.getDay(); const diff=(day===0)?-6:1-day;
   d.setDate(d.getDate()+diff); d.setHours(0,0,0,0); return d.getTime();
 }
-
 function buildWeekWindows() {
   if(!snapshots.length){weekWindows=[];currentWeekIdx=-1;return;}
   const firstTs=snapTs(snapshots[0]), lastTs=snapTs(snapshots[snapshots.length-1]);
@@ -653,10 +656,8 @@ function buildWeekWindows() {
   }
   weekWindows=windows; currentWeekIdx=weekWindows.length-1;
 }
-
 function stepWeek(dir) {
-  const n=currentWeekIdx+dir;
-  if(n<0||n>=weekWindows.length)return;
+  const n=currentWeekIdx+dir; if(n<0||n>=weekWindows.length)return;
   currentWeekIdx=n; renderReport();
 }
 
@@ -673,7 +674,6 @@ function sortBy(field){
   const ae=document.getElementById('sort-'+field);if(ae){ae.textContent=arrow;ae.classList.add('active');}
   renderRoster();
 }
-
 function sortAnrBy(field){
   if(anrCurrentSort.field===field){anrCurrentSort.dir=anrCurrentSort.dir==='desc'?'asc':'desc';}
   else{anrCurrentSort.field=field;anrCurrentSort.dir=(field==='followers'||field==='growth'||field==='pct')?'desc':'asc';}
@@ -682,7 +682,6 @@ function sortAnrBy(field){
   const ae=document.getElementById('anr-sort-'+field);if(ae){ae.textContent=arrow;ae.classList.add('active');}
   renderAnrRoster();
 }
-
 function switchRosterTab(tab){
   currentRosterTab=tab;
   document.querySelectorAll('.roster-tab').forEach(el=>{
@@ -711,7 +710,6 @@ function getSortedRoster(filterStarred=false){
     return 0;
   });
 }
-
 function getSortedAnrRoster(){
   let list=[...anrRoster].map((r,i)=>{
     const pair=getSnapPairForRange(r.handle, anrRange, anrSnapshots);
@@ -751,7 +749,6 @@ function renderRoster(){
     return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${removeBtn}</tr>`;
   }).join('');
 }
-
 function renderAnrRoster(){
   const tbody=document.getElementById('anr-roster-body');
   if(!anrRoster.length){tbody.innerHTML=`<tr><td colspan="8" class="muted" style="padding:12px 0;font-size:13px;">No prospects added yet — add a handle or import a CSV.</td></tr>`;return;}
@@ -797,7 +794,6 @@ function editAnrGenre(i){
   menu.style.top=(rect.bottom+6)+'px'; menu.style.left=rect.left+'px';
   setTimeout(()=>document.addEventListener('click',close,{once:true}),0);
 }
-
 function editAnrNote(i){
   const val=prompt('Note:',anrRoster[i].note||'');
   if(val===null)return;
@@ -812,7 +808,6 @@ async function fetchFollowers(handle){
   if(data.follower_count==null)throw new Error('No count returned');
   return{follower_count:data.follower_count,profile_pic_url:data.profile_pic_url||''};
 }
-
 function showErr(msg){const el=document.getElementById('err-box');el.textContent=msg;el.style.display='block';setTimeout(()=>el.style.display='none',7000);}
 function showAnrErr(msg){const el=document.getElementById('anr-err-box');el.textContent=msg;el.style.display='block';setTimeout(()=>el.style.display='none',7000);}
 
@@ -827,7 +822,6 @@ async function addHandle(){
   catch(e){entry.status='error';showErr('Error on @'+handle+': '+e.message);}
   renderRoster();updateLastUpdated();await persistRoster();
 }
-
 async function anrAddHandle(){
   const input=document.getElementById('anr-add-input'),handle=input.value.trim().replace('@','').toLowerCase();
   if(!handle)return;
@@ -839,7 +833,6 @@ async function anrAddHandle(){
   catch(e){entry.status='error';showAnrErr('Error on @'+handle+': '+e.message);}
   renderAnrRoster();await persistAnrRoster();
 }
-
 async function anrImportCSV(event){
   const file=event.target.files[0];if(!file)return;
   const statusEl=document.getElementById('anr-csv-status');
@@ -868,7 +861,6 @@ async function anrImportCSV(event){
 
 async function removeHandle(i){roster.splice(i,1);renderRoster();await persistRoster();}
 async function anrRemoveHandle(i){anrRoster.splice(i,1);renderAnrRoster();await persistAnrRoster();}
-
 async function retryHandle(i){
   const r=roster[i];if(!r)return;
   r.status='loading';renderRoster();
@@ -891,7 +883,6 @@ async function refreshAll(){
   pb.style.display='none';btn.disabled=false;btn.textContent='↻ Refresh all';
   updateLastUpdated();await persistRoster();await saveSnapshot(true);
 }
-
 async function anrRefreshAll(){
   const btn=document.getElementById('anr-refresh-btn'),pb=document.getElementById('anr-progress-bar'),pf=document.getElementById('anr-progress-fill');
   btn.disabled=true;btn.textContent='Refreshing...';pb.style.display='block';pf.style.width='0%';
@@ -914,7 +905,6 @@ async function saveSnapshot(silent=false){
   snapshots.push(snap);buildWeekWindows();await persistSnapshots();renderReport();
   if(!silent)alert('Snapshot saved — '+snap.date);
 }
-
 async function saveAnrSnapshot(silent=false){
   const valid=anrRoster.filter(r=>r.followers!=null);if(!valid.length)return;
   const snap={date:new Date().toISOString(),type:'daily',data:valid.map(r=>({handle:r.handle,followers:r.followers}))};
@@ -927,7 +917,6 @@ function getWeekSnapshotPair(){
   const w=weekWindows[currentWeekIdx];
   return{latest:w.endSnap,prev:w.startSnap};
 }
-
 function renderReport(){
   const tbody=document.getElementById('report-rows'),dateEl=document.getElementById('report-date');
   const prevBtn=document.getElementById('week-prev-btn'),nextBtn=document.getElementById('week-next-btn');
@@ -988,7 +977,6 @@ function downloadCSV(){
   });
   const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
 }
-
 function anrDownloadCSV(){
   const sorted=getSortedAnrRoster();
   let csv='Rank,Handle,Followers,Growth,Growth %,Genre,Notes\n';
@@ -999,7 +987,6 @@ function anrDownloadCSV(){
   });
   const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Alamo-ANR-Report-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
 }
-
 function downloadPDF(){
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
   const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
@@ -1015,7 +1002,6 @@ function downloadPDF(){
   doc.autoTable({startY:34,head:[['#','Handle','Followers','Follower Growth','Follower Growth %']],body:tableData,styles:{fontSize:10,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:12},1:{cellWidth:60},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:40}}});
   doc.save(`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.pdf`);
 }
-
 function anrDownloadPDF(){
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
   const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
@@ -1031,7 +1017,6 @@ function anrDownloadPDF(){
   doc.autoTable({startY:34,head:[['#','Handle','Followers','Growth','Growth %','Genre','Notes']],body:tableData,styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:10},1:{cellWidth:50},2:{cellWidth:28},3:{cellWidth:25},4:{cellWidth:25},5:{cellWidth:25},6:{cellWidth:30}}});
   doc.save(`Alamo-ANR-Report-${getFileDateStr()}.pdf`);
 }
-
 function downloadReportPDF(){
   if(!snapshots.length){alert('No snapshot data yet.');return;}
   const pair=getWeekSnapshotPair();if(!pair||!pair.latest){alert('No data for this week.');return;}
