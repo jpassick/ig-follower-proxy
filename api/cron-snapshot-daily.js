@@ -32,7 +32,7 @@ async function kvSet(key, value) {
 }
 
 async function fetchFollowerCount(handle) {
-  const url = `https://instagram-best-experience.p.rapidapi.com/user/info?username=${handle}`;
+  const url = `https://instagram-best-experience.p.rapidapi.com/profile?username=${encodeURIComponent(handle)}`;
   const res = await fetch(url, {
     headers: {
       'x-rapidapi-key': RAPIDAPI_KEY,
@@ -41,11 +41,10 @@ async function fetchFollowerCount(handle) {
   });
   if (!res.ok) throw new Error(`RapidAPI error for ${handle}: ${res.status}`);
   const data = await res.json();
-  const user = data?.data?.user;
-  if (!user) throw new Error(`No user data for ${handle}`);
+  if (!data || !data.follower_count) throw new Error(`No user data for ${handle}`);
   return {
-    followers: user.edge_followed_by?.count ?? null,
-    profilePic: user.profile_pic_url_hd || user.profile_pic_url || null,
+    followers: data.follower_count,
+    profilePic: data.profile_pic_url_hd || data.profile_pic_url || null,
   };
 }
 
