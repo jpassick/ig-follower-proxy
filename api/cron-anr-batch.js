@@ -4,7 +4,7 @@ const KV_URL = process.env.KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN;
 const ANR_SNAPSHOTS_KEY = 'anr-snapshots';
 const ANR_LAST_REFRESHED_KEY = 'anr-last-refreshed';
-const BATCH_SIZE = 150;
+const BATCH_SIZE = 90;
 
 async function kvGet(key) {
   const r = await fetch(`${KV_URL}/get/${key}`, {
