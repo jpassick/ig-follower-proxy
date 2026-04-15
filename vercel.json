@@ -20,7 +20,15 @@
     { "path": "/api/cron-anr-batch", "schedule": "25 14 * * *" },
     { "path": "/api/cron-anr-batch", "schedule": "30 14 * * *" },
     { "path": "/api/cron-anr-batch", "schedule": "35 14 * * *" },
-    { "path": "/api/cron-snapshot-daily", "schedule": "0 15 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "40 14 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "45 14 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "50 14 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "55 14 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "0 15 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "5 15 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "10 15 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "15 15 * * *" },
+    { "path": "/api/cron-snapshot-daily", "schedule": "0 16 * * *" },
     { "path": "/api/cron-backup-snapshots", "schedule": "0 4 * * *" }
   ],
   "functions": {
