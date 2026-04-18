@@ -159,7 +159,7 @@ export default async function handler(req, res) {
         errors.push({ handle: artist.handle, error: err.message });
         console.error(`Error refreshing A&R ${artist.handle}:`, err.message);
         // If account is gone (404/403), still mark as updated so it rotates out
-        if (err.message.includes('404') || err.message.includes('403')) {
+        if (err.message.includes('404') || err.message.includes('403') || err.message.includes('429')) {
           const target = roster.find(a => a.handle === artist.handle);
           if (target) target.lastUpdated = now;
         }
