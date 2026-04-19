@@ -4,7 +4,7 @@ const KV_URL = process.env.KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN;
 const ANR_SNAPSHOTS_KEY = 'anr-snapshots';
 const ANR_LAST_REFRESHED_KEY = 'anr-last-refreshed';
-const BATCH_SIZE = 90;
+const BATCH_SIZE = 70;
 
 async function kvGet(key) {
   const r = await fetch(`${KV_URL}/get/${key}`, {
@@ -159,7 +159,7 @@ export default async function handler(req, res) {
         errors.push({ handle: artist.handle, error: err.message });
         console.error(`Error refreshing A&R ${artist.handle}:`, err.message);
         // If account is gone (404/403), still mark as updated so it rotates out
-        if (err.message.includes('404') || err.message.includes('403') || err.message.includes('429')) {
+        if (err.message.includes('404') || err.message.includes('403') || err.message.includes('429') || err.message.includes('400')) {
           const target = roster.find(a => a.handle === artist.handle);
           if (target) target.lastUpdated = now;
         }
