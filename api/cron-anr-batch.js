@@ -138,8 +138,14 @@ export default async function handler(req, res) {
 
     const results = [];
     const errors = [];
+    const batchStart = Date.now();
 
     for (const artist of batch) {
+      // Stop if we're approaching the 300s limit
+      if (Date.now() - batchStart > 240000) {
+        console.log('Approaching time limit, stopping early to save progress');
+        break;
+      }
       if (!artist.handle || typeof artist.handle !== 'string' || !artist.handle.trim()) {
         continue;
       }
