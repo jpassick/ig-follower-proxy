@@ -496,21 +496,30 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && pickerOpen
 function getSnapPairForRange(handle, range, snapList) {
   if (!snapList.length) return { cur: null, prev: null };
   const { startTs, endTs } = range;
-  let endSnap = null, endBest = Infinity, startSnap = null, startBest = Infinity;
+
+  const endDay   = toStartOfDay(endTs);
+  const startDay = toStartOfDay(startTs);
+
+  // Find the latest snapshot whose date is on or before the target day
+  let endSnap = null, startSnap = null;
   for (const snap of snapList) {
-    const ts = snapTs(snap);
-    const dEnd = Math.abs(ts - endTs), dStart = Math.abs(ts - startTs);
-    if (dEnd   < endBest)   { endBest   = dEnd;   endSnap   = snap; }
-    if (dStart < startBest) { startBest = dStart; startSnap = snap; }
+    const snapDay = toStartOfDay(snapTs(snap));
+    if (snapDay <= endDay)   endSnap   = snap;
+    if (snapDay <= startDay) startSnap = snap;
   }
+
   const curEntry  = endSnap   ? endSnap.data.find(d => d.handle === handle)   : null;
   const prevEntry = startSnap ? startSnap.data.find(d => d.handle === handle) : null;
+
+  // If both bounds land on the same snapshot (e.g. "Today" or a single-day range),
+  // fall back to the snapshot just before it as the baseline
   if (endSnap && startSnap && endSnap === startSnap) {
     const idx = snapList.indexOf(endSnap);
-    const altSnap = idx > 0 ? snapList[idx - 1] : null;
+    const altSnap  = idx > 0 ? snapList[idx - 1] : null;
     const altEntry = altSnap ? altSnap.data.find(d => d.handle === handle) : null;
     return { cur: curEntry ? curEntry.followers : null, prev: altEntry ? altEntry.followers : null };
   }
+
   return { cur: curEntry ? curEntry.followers : null, prev: prevEntry ? prevEntry.followers : null };
 }
 
