@@ -1,5 +1,17 @@
 {
   "crons": [
+    { "path": "/api/cron-anr-batch", "schedule": "0 11 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "5 11 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "10 11 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "15 11 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "20 11 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "25 11 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "30 11 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "35 11 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "40 11 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "45 11 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "50 11 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "55 11 * * *" },
     { "path": "/api/cron-anr-batch", "schedule": "0 12 * * *" },
     { "path": "/api/cron-anr-batch", "schedule": "5 12 * * *" },
     { "path": "/api/cron-anr-batch", "schedule": "10 12 * * *" },
@@ -28,6 +40,10 @@
     { "path": "/api/cron-anr-batch", "schedule": "5 14 * * *" },
     { "path": "/api/cron-anr-batch", "schedule": "10 14 * * *" },
     { "path": "/api/cron-anr-batch", "schedule": "15 14 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "20 14 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "25 14 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "30 14 * * *" },
+    { "path": "/api/cron-anr-batch", "schedule": "35 14 * * *" },
     { "path": "/api/cron-snapshot-daily", "schedule": "0 15 * * *" },
     { "path": "/api/cron-backup-snapshots", "schedule": "0 4 * * *" }
   ],
