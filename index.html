@@ -23,8 +23,8 @@
   .app-header { display: flex; align-items: center; gap: 14px; margin-bottom: 0.25rem; }
   .app-logo { height: 28px; opacity: 0.8; }
   h1 { font-size: 18px; font-weight: 600; }
-  .subtitle { font-size: 13px; color: #888; margin-bottom: 0.1rem; }
-  .last-updated { font-size: 11px; color: #bbb; margin-bottom: 0.25rem; }
+  .subtitle { font-size: 13px; color: #888; margin-bottom: 0.75rem; }
+  .last-updated { font-size: 11px; color: #bbb; margin-bottom: 0.75rem; }
   .view-badge { font-size: 11px; background: #f0f0f0; color: #888; border-radius: 20px; padding: 2px 10px; }
   .tabs { display: flex; gap: 6px; margin-bottom: 1.5rem; }
   .tab { font-size: 13px; padding: 6px 16px; border-radius: 20px; cursor: pointer; border: 1px solid #ddd; background: transparent; color: #666; }
@@ -86,6 +86,7 @@
   .note-pill:hover { background: #eee; }
   .genre-pill { font-size: 11px; background: #eef4ff; color: #3b6fd4; border-radius: 20px; padding: 2px 8px; cursor: pointer; }
   .genre-pill:hover { background: #ddeeff; }
+  .alert-emoji { margin-right: 4px; font-size: 13px; vertical-align: middle; }
   .csv-import-row { display: flex; gap: 8px; margin-bottom: 1rem; align-items: center; }
   .csv-label { font-size: 12px; color: #888; }
   #date-picker-panel { position: fixed; background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.13); z-index: 900; display: none; overflow: hidden; }
@@ -131,7 +132,6 @@
     <h1>Instagram Follower Tracker <span class="view-badge" id="view-badge" style="display:none;">View only</span></h1>
   </div>
   <p class="subtitle">Alamo Records / Santa Anna Roster</p>
-  <p class="last-updated" id="last-updated"></p>
   <div class="tabs">
     <button class="tab active" onclick="switchTab('live')">Live lookup</button>
     <button class="tab" onclick="switchTab('report')">Weekly report</button>
@@ -151,6 +151,7 @@
       <button class="secondary" onclick="downloadPDF()">↓ Download PDF</button>
     </div>
     <div class="progress-bar" id="progress-bar"><div class="progress-bar-fill" id="progress-fill"></div></div>
+    <p class="last-updated" id="last-updated"></p>
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
       <div class="roster-tabs">
         <button class="roster-tab active" onclick="switchRosterTab('all')">Full roster</button>
@@ -225,8 +226,8 @@
       <button class="secondary" onclick="anrDownloadPDF()">↓ Download PDF</button>
     </div>
     <div class="progress-bar" id="anr-progress-bar"><div class="progress-bar-fill" id="anr-progress-fill"></div></div>
-    <p class="last-updated" id="anr-last-updated" style="display:none;"></p>
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
+    <p class="last-updated" id="anr-last-updated"></p>
+    <div style="display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
       <div style="display:flex;align-items:center;gap:6px;">
         <span class="period-label">Growth period:</span>
         <button class="period-btn" id="anr-period-btn" onclick="openPicker('anr', this)">
@@ -597,7 +598,6 @@ async function loadAnrLastRefreshed() {
       if (!isNaN(d.getTime())) el.textContent=`Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
       else el.textContent='';
     } else el.textContent='';
-    if (document.getElementById('view-anr').style.display!=='none') document.getElementById('last-updated').textContent=el.textContent;
   } catch(e){}
 }
 
@@ -755,10 +755,10 @@ function renderAnrRoster(){
     const igUrl=`https://www.instagram.com/${r.handle}/`;
     const picUrl=r.profilePic?proxyUrl(r.profilePic):'';
     const avatarHtml=picUrl?`<img src="${picUrl}" class="avatar" alt="" onerror="this.outerHTML='<span class=\\'avatar-placeholder\\'></span>'" />`:`<span class="avatar-placeholder"></span>`;
-    const alertEmoji=r._pct>=4.5?'🚨 ':'';
+    const alertEmoji=(r._pct!=null&&r._pct>=4.5)?'<span class="alert-emoji" title="High growth rate">🚨</span>':'';
     const genreHtml=`<span class="genre-pill" onclick="editAnrGenre(${i})" title="Click to edit">${r.genre||'+ genre'}</span>`;
     const noteHtml=`<span class="note-pill" onclick="editAnrNote(${i})" title="${r.note||'Click to add note'}">${r.note||'+ note'}</span>`;
-    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${alertEmoji}${r.handle}</a></div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td><td>${genreHtml}</td><td>${noteHtml}</td><td style="text-align:right"><button class="danger" onclick="anrRemoveHandle(${i})">✕</button></td></tr>`;
+    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${alertEmoji}${renderPct(r._pct)}</td><td>${genreHtml}</td><td>${noteHtml}</td><td style="text-align:right"><button class="danger" onclick="anrRemoveHandle(${i})">✕</button></td></tr>`;
   }).join('');
 }
 
@@ -1044,13 +1044,10 @@ function switchTab(tab){
   document.getElementById('view-report').style.display=tab==='report'?'':'none';
   document.getElementById('view-anr').style.display=tab==='anr'?'':'none';
   if(tab==='anr'){
-    const anrTs=document.getElementById('anr-last-updated').textContent;
-    document.getElementById('last-updated').textContent=anrTs||'';
-    document.getElementById('last-updated').style.display='';
     if(!isAdmin&&!isAnr){
       document.getElementById('view-anr').innerHTML=`<div style="margin-top:3rem;text-align:center;color:#aaa;font-size:14px;">🔒 A&R access is restricted.<br><span style="font-size:12px;margin-top:6px;display:block;">Contact your admin for access.</span></div>`;
     } else { loadAnrLastRefreshed(); if(!anrRoster.length)loadAnrAll(); }
-  } else { updateLastUpdated(); }
+  }
   if(tab==='report')renderReport();
   closePicker();
 }
