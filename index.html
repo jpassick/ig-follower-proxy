@@ -227,7 +227,11 @@
     </div>
     <div class="progress-bar" id="anr-progress-bar"><div class="progress-bar-fill" id="anr-progress-fill"></div></div>
     <p class="last-updated" id="anr-last-updated"></p>
-    <div style="display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
+      <div class="roster-tabs">
+        <button class="roster-tab active" onclick="switchAnrRosterTab('all')">Full roster</button>
+        <button class="roster-tab" onclick="switchAnrRosterTab('my')">My roster</button>
+      </div>
       <div style="display:flex;align-items:center;gap:6px;">
         <span class="period-label">Growth period:</span>
         <button class="period-btn" id="anr-period-btn" onclick="openPicker('anr', this)">
@@ -249,12 +253,13 @@
       <thead>
         <tr>
           <th style="width:4%">#</th>
-          <th style="width:26%" onclick="sortAnrBy('handle')">Handle <span class="sort-arrow" id="anr-sort-handle">↕</span></th>
+          <th style="width:4%"></th>
+          <th style="width:22%" onclick="sortAnrBy('handle')">Handle <span class="sort-arrow" id="anr-sort-handle">↕</span></th>
           <th style="width:14%" onclick="sortAnrBy('followers')">Followers <span class="sort-arrow" id="anr-sort-followers">↕</span></th>
-          <th style="width:18%" onclick="sortAnrBy('growth')">Growth <span class="sort-arrow" id="anr-sort-growth">↕</span></th>
-          <th style="width:18%" onclick="sortAnrBy('pct')">Growth % <span class="sort-arrow active" id="anr-sort-pct">▼</span></th>
-          <th style="width:14%">Genre</th>
-          <th style="width:12%">Notes</th>
+          <th style="width:16%" onclick="sortAnrBy('growth')">Growth <span class="sort-arrow" id="anr-sort-growth">↕</span></th>
+          <th style="width:16%" onclick="sortAnrBy('pct')">Growth % <span class="sort-arrow active" id="anr-sort-pct">▼</span></th>
+          <th style="width:12%">Genre</th>
+          <th style="width:10%">Notes</th>
           <th style="width:6%"></th>
         </tr>
       </thead>
@@ -267,13 +272,16 @@
 
 <script>
 const STARRED_KEY = 'ig_starred_v1';
+const STARRED_ANR_KEY = 'ig_starred_anr_v1';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 let roster = [], snapshots = [], currentSort = { field: 'growth', dir: 'desc' }, isAdmin = false, isAnr = false;
 let currentRosterTab = 'all';
 let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
+let anrStarred = new Set(JSON.parse(localStorage.getItem(STARRED_ANR_KEY) || '[]'));
 let anrRoster = [], anrSnapshots = [], anrCurrentSort = { field: 'pct', dir: 'desc' };
+let currentAnrRosterTab = 'all';
 let weekWindows = [], currentWeekIdx = -1;
 
 function presetToRange(key) {
@@ -437,17 +445,13 @@ function pickerNavMonth(dir) {
   renderPicker();
 }
 
-// FIX: if a range is already fully set, first click resets to new start
 function pickerClickDate(ts) {
   if (!pickerStart || pickerEnd !== null) {
-    // Start fresh selection
     pickerStart = ts; pickerEnd = null;
     renderPicker();
   } else if (ts === pickerStart) {
-    // Same date twice = single day
     applyDateRange(ts, ts, true);
   } else {
-    // Complete the range
     applyDateRange(Math.min(pickerStart, ts), Math.max(pickerStart, ts), false);
   }
 }
@@ -501,7 +505,6 @@ function getSnapPairForRange(handle, range, snapList) {
   const endDay   = toStartOfDay(endTs);
   const startDay = toStartOfDay(startTs);
 
-  // Find the latest snapshot whose date is on or before the target day
   let endSnap = null, startSnap = null;
   for (const snap of snapList) {
     const snapDay = toStartOfDay(snapTs(snap));
@@ -512,8 +515,6 @@ function getSnapPairForRange(handle, range, snapList) {
   const curEntry  = endSnap   ? endSnap.data.find(d => d.handle === handle)   : null;
   const prevEntry = startSnap ? startSnap.data.find(d => d.handle === handle) : null;
 
-  // If both bounds land on the same snapshot (e.g. "Today" or a single-day range),
-  // fall back to the snapshot just before it as the baseline
   if (endSnap && startSnap && endSnap === startSnap) {
     const idx = snapList.indexOf(endSnap);
     const altSnap  = idx > 0 ? snapList[idx - 1] : null;
@@ -528,6 +529,11 @@ function saveStarred() { localStorage.setItem(STARRED_KEY, JSON.stringify([...st
 function toggleStar(handle) {
   if(starred.has(handle)) starred.delete(handle); else starred.add(handle);
   saveStarred(); renderRoster();
+}
+function saveAnrStarred() { localStorage.setItem(STARRED_ANR_KEY, JSON.stringify([...anrStarred])); }
+function toggleAnrStar(handle) {
+  if(anrStarred.has(handle)) anrStarred.delete(handle); else anrStarred.add(handle);
+  saveAnrStarred(); renderAnrRoster();
 }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function snapTs(s) { return s.ts || new Date(s.date).getTime(); }
@@ -552,14 +558,20 @@ function showApp() {
   document.getElementById('password-gate').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
   if (!isAdmin) {
+    // Main roster — always read-only for non-admin
     document.getElementById('admin-actions').style.display = 'none';
     document.getElementById('viewer-actions').style.display = 'flex';
     document.getElementById('add-row-el').style.display = 'none';
     document.getElementById('view-badge').style.display = 'inline';
+    // A&R — admins-only actions always hidden for non-admin
     document.getElementById('anr-admin-actions').style.display = 'none';
     document.getElementById('anr-viewer-actions').style.display = 'flex';
-    document.getElementById('anr-add-row-el').style.display = 'none';
-    document.getElementById('anr-csv-row').style.display = 'none';
+    if (!isAnr) {
+      // Pure viewer: hide add + bulk import
+      document.getElementById('anr-add-row-el').style.display = 'none';
+      document.getElementById('anr-csv-row').style.display = 'none';
+    }
+    // A&R users keep anr-add-row-el and anr-csv-row visible via default CSS display
   }
   loadAll();
   if (isAnr || isAdmin) loadAnrAll();
@@ -580,7 +592,10 @@ async function loadSnapshots() {
   try { const res=await fetch('/api/snapshots'); const data=await res.json(); snapshots=data.snapshots||[]; buildWeekWindows(); renderRoster(); updateLastUpdated(); }
   catch(e) { snapshots=[]; }
 }
-async function loadAnrAll() { await Promise.all([loadAnrRoster(), loadAnrSnapshots(), loadAnrLastRefreshed()]); }
+async function loadAnrAll() {
+  await Promise.all([loadAnrRoster(), loadAnrSnapshots()]);
+  await loadAnrLastRefreshed();
+}
 async function loadAnrRoster() {
   try { const res=await fetch('/api/anr-roster'); const data=await res.json(); anrRoster=data.roster||[]; renderAnrRoster(); }
   catch(e) { anrRoster=[]; renderAnrRoster(); }
@@ -590,15 +605,31 @@ async function loadAnrSnapshots() {
   catch(e) { anrSnapshots=[]; }
 }
 async function loadAnrLastRefreshed() {
+  const el = document.getElementById('anr-last-updated');
+  if (!el) return;
+  let timestamp = null;
+  // First try: /api/anr-status (set by cron)
   try {
-    const res=await fetch('/api/anr-status'); const data=await res.json();
-    const el=document.getElementById('anr-last-updated');
+    const res = await fetch('/api/anr-status');
+    const data = await res.json();
     if (data.lastRefreshed) {
-      const d=new Date(data.lastRefreshed);
-      if (!isNaN(d.getTime())) el.textContent=`Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
-      else el.textContent='';
-    } else el.textContent='';
+      const d = new Date(data.lastRefreshed);
+      if (!isNaN(d.getTime())) timestamp = d;
+    }
   } catch(e){}
+  // Fallback: compute from anrRoster entries' updatedAt fields
+  if (!timestamp && anrRoster.length) {
+    const ts = anrRoster.filter(r => r.updatedAt).map(r => Number(r.updatedAt)).filter(t => !isNaN(t));
+    if (ts.length) {
+      const d = new Date(Math.max(...ts));
+      if (!isNaN(d.getTime())) timestamp = d;
+    }
+  }
+  if (timestamp) {
+    el.textContent = `Last Refreshed: ${timestamp.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${timestamp.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
+  } else {
+    el.textContent = '';
+  }
 }
 
 function updateLastUpdated() {
@@ -677,10 +708,17 @@ function sortAnrBy(field){
 }
 function switchRosterTab(tab){
   currentRosterTab=tab;
-  document.querySelectorAll('.roster-tab').forEach(el=>{
+  document.querySelectorAll('#view-live .roster-tab').forEach(el=>{
     el.classList.toggle('active', el.getAttribute('onclick').includes(`'${tab}'`));
   });
   renderRoster();
+}
+function switchAnrRosterTab(tab){
+  currentAnrRosterTab=tab;
+  document.querySelectorAll('#view-anr .roster-tab').forEach(el=>{
+    el.classList.toggle('active', el.getAttribute('onclick').includes(`'${tab}'`));
+  });
+  renderAnrRoster();
 }
 
 function getSortedRoster(filterStarred=false){
@@ -703,7 +741,7 @@ function getSortedRoster(filterStarred=false){
     return 0;
   });
 }
-function getSortedAnrRoster(){
+function getSortedAnrRoster(filterStarred=false){
   let list=[...anrRoster].map((r,i)=>{
     const pair=getSnapPairForRange(r.handle, anrRange, anrSnapshots);
     const cur=pair.cur??r.followers;
@@ -711,6 +749,7 @@ function getSortedAnrRoster(){
     const p=(cur!=null&&pair.prev!=null)?pct(cur,pair.prev):null;
     return{...r,_origIndex:i,_cur:cur,_diff:diff,_pct:p};
   });
+  if(filterStarred) list=list.filter(r=>anrStarred.has(r.handle));
   return list.sort((a,b)=>{
     let av,bv;
     if(anrCurrentSort.field==='followers'){av=a._cur??a.followers??0;bv=b._cur??b.followers??0;}
@@ -744,8 +783,11 @@ function renderRoster(){
 }
 function renderAnrRoster(){
   const tbody=document.getElementById('anr-roster-body');
-  if(!anrRoster.length){tbody.innerHTML=`<tr><td colspan="8" class="muted" style="padding:12px 0;font-size:13px;">No prospects added yet — add a handle or import a CSV.</td></tr>`;return;}
-  const sorted=getSortedAnrRoster();
+  const isMyRoster=currentAnrRosterTab==='my';
+  const canEdit=isAdmin||isAnr;
+  if(!anrRoster.length){tbody.innerHTML=`<tr><td colspan="9" class="muted" style="padding:12px 0;font-size:13px;">No prospects added yet${canEdit?' — add a handle or import a CSV.':'.'}</td></tr>`;return;}
+  const sorted=getSortedAnrRoster(isMyRoster);
+  if(isMyRoster&&sorted.length===0){tbody.innerHTML=`<tr><td colspan="9" style="padding:12px 0;font-size:13px;color:#aaa;">No starred prospects yet — click ☆ next to any prospect to add them here.</td></tr>`;return;}
   tbody.innerHTML=sorted.map((r,rankIdx)=>{
     const i=r._origIndex;
     const displayFollowers=r._cur??r.followers;
@@ -753,12 +795,14 @@ function renderAnrRoster(){
       :r.status==='error'?'<span class="pill-err">error</span>'
       :`<strong>${fmt(displayFollowers)}</strong>`;
     const igUrl=`https://www.instagram.com/${r.handle}/`;
+    const isStarred=anrStarred.has(r.handle);
     const picUrl=r.profilePic?proxyUrl(r.profilePic):'';
     const avatarHtml=picUrl?`<img src="${picUrl}" class="avatar" alt="" onerror="this.outerHTML='<span class=\\'avatar-placeholder\\'></span>'" />`:`<span class="avatar-placeholder"></span>`;
     const alertEmoji=(r._pct!=null&&r._pct>=4.5)?'<span class="alert-emoji" title="High growth rate">🚨</span>':'';
     const genreHtml=`<span class="genre-pill" onclick="editAnrGenre(${i})" title="Click to edit">${r.genre||'+ genre'}</span>`;
     const noteHtml=`<span class="note-pill" onclick="editAnrNote(${i})" title="${r.note||'Click to add note'}">${r.note||'+ note'}</span>`;
-    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${alertEmoji}${renderPct(r._pct)}</td><td>${genreHtml}</td><td>${noteHtml}</td><td style="text-align:right"><button class="danger" onclick="anrRemoveHandle(${i})">✕</button></td></tr>`;
+    const removeCell=canEdit?`<button class="danger" onclick="anrRemoveHandle(${i})">✕</button>`:'';
+    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleAnrStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${alertEmoji}${renderPct(r._pct)}</td><td>${genreHtml}</td><td>${noteHtml}</td><td style="text-align:right">${removeCell}</td></tr>`;
   }).join('');
 }
 
@@ -824,7 +868,7 @@ async function anrAddHandle(){
   anrRoster.push(entry);renderAnrRoster();
   try{const result=await fetchFollowers(handle);entry.followers=result.follower_count;entry.profilePic=result.profile_pic_url;entry.status='ok';entry.updatedAt=Date.now();}
   catch(e){entry.status='error';showAnrErr('Error on @'+handle+': '+e.message);}
-  renderAnrRoster();await persistAnrRoster();
+  renderAnrRoster();await persistAnrRoster();await loadAnrLastRefreshed();
 }
 async function anrImportCSV(event){
   const file=event.target.files[0];if(!file)return;
@@ -850,6 +894,7 @@ async function anrImportCSV(event){
   }
   statusEl.textContent=`✅ Done! ${added} of ${total} imported and saved.`;
   event.target.value='';
+  await loadAnrLastRefreshed();
 }
 
 async function removeHandle(i){roster.splice(i,1);renderRoster();await persistRoster();}
@@ -971,7 +1016,7 @@ function downloadCSV(){
   const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
 }
 function anrDownloadCSV(){
-  const sorted=getSortedAnrRoster();
+  const sorted=getSortedAnrRoster(currentAnrRosterTab==='my');
   let csv='Rank,Handle,Followers,Growth,Growth %,Genre,Notes\n';
   sorted.forEach((r,idx)=>{
     const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';
@@ -998,7 +1043,7 @@ function downloadPDF(){
 function anrDownloadPDF(){
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
   const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  const sorted=getSortedAnrRoster();
+  const sorted=getSortedAnrRoster(currentAnrRosterTab==='my');
   doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('A&R Prospects Report',14,20);
   doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(120);
   doc.text(`Alamo Records / Santa Anna — ${today}`,14,28);doc.setTextColor(0);
@@ -1053,6 +1098,7 @@ function switchTab(tab){
 }
 
 document.getElementById('add-input').addEventListener('keydown',e=>{if(e.key==='Enter')addHandle();});
+document.getElementById('anr-add-input').addEventListener('keydown',e=>{if(e.key==='Enter')anrAddHandle();});
 </script>
 </body>
 </html>
