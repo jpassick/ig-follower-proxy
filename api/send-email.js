@@ -55,20 +55,27 @@ export default async function handler(req, res) {
   const withGrowth = latest.data.map(d => {
     const pe = prev ? prev.data.find(p => p.handle === d.handle) : null;
     const diff = pe ? d.followers - pe.followers : null;
-    const pct = pe ? ((d.followers - pe.followers) / pe.followers * 100) : null;
+    const pct = (pe && pe.followers > 0) ? ((d.followers - pe.followers) / pe.followers * 100) : null;
     return { ...d, diff, pct };
-  }).sort((a, b) => (b.diff ?? -Infinity) - (a.diff ?? -Infinity));
+  }).sort((a, b) => {
+    const aPct = (a.pct == null || !isFinite(a.pct)) ? -Infinity : a.pct;
+    const bPct = (b.pct == null || !isFinite(b.pct)) ? -Infinity : b.pct;
+    return bPct - aPct;
+  });
 
   const rows = withGrowth.map(d => {
     const color = d.diff > 0 ? '#27ae60' : d.diff < 0 ? '#c0392b' : '#888';
-    const sign = d.diff >= 0 ? '+' : '';
-    const growthStr = d.diff !== null ? `${sign}${Number(d.diff).toLocaleString()} (${sign}${d.pct.toFixed(2)}%)` : '—';
+    const diffSign = d.diff >= 0 ? '+' : '';
+    const pctSign = d.pct >= 0 ? '+' : '';
+    const diffStr = d.diff !== null ? `${diffSign}${Number(d.diff).toLocaleString()}` : '—';
+    const pctStr = d.pct !== null ? `${pctSign}${d.pct.toFixed(2)}%` : '—';
     return `<tr>
       <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px;">
         <a href="https://www.instagram.com/${d.handle}/" style="color:#1a1a1a;text-decoration:none;">@${d.handle}</a>
       </td>
       <td style="padding:8px 12px;border-bottom:1px solid #eee;font-weight:600;font-size:13px;">${fmt(d.followers)}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #eee;color:${color};font-size:13px;">${growthStr}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;color:${color};font-size:13px;">${pctStr}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;color:${color};font-size:13px;">${diffStr}</td>
     </tr>`;
   }).join('');
 
@@ -84,6 +91,7 @@ export default async function handler(req, res) {
           <tr style="background:#f9f9f7;">
             <th style="text-align:left;padding:8px 12px;font-size:12px;color:#888;font-weight:500;border-bottom:2px solid #eee;">Handle</th>
             <th style="text-align:left;padding:8px 12px;font-size:12px;color:#888;font-weight:500;border-bottom:2px solid #eee;">Followers</th>
+            <th style="text-align:left;padding:8px 12px;font-size:12px;color:#888;font-weight:500;border-bottom:2px solid #eee;">7 Day Growth %</th>
             <th style="text-align:left;padding:8px 12px;font-size:12px;color:#888;font-weight:500;border-bottom:2px solid #eee;">7 Day Growth</th>
           </tr>
         </thead>
