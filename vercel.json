@@ -44,13 +44,15 @@
     { "path": "/api/cron-anr-batch", "schedule": "25 14 * * *" },
     { "path": "/api/cron-anr-batch", "schedule": "30 14 * * *" },
     { "path": "/api/cron-anr-batch", "schedule": "35 14 * * *" },
+    { "path": "/api/cron-tiktok-snapshot-daily", "schedule": "40 14 * * *" },
     { "path": "/api/cron-snapshot-daily", "schedule": "0 15 * * *" },
     { "path": "/api/cron-backup-snapshots", "schedule": "0 4 * * *" }
   ],
   "functions": {
-    "api/cron-snapshot-daily.js":   { "maxDuration": 300 },
-    "api/cron-anr-batch.js":        { "maxDuration": 300 },
-    "api/cron-backup-snapshots.js": { "maxDuration": 30 },
-    "api/followers.js":             { "maxDuration": 30 }
+    "api/cron-snapshot-daily.js":        { "maxDuration": 300 },
+    "api/cron-tiktok-snapshot-daily.js": { "maxDuration": 300 },
+    "api/cron-anr-batch.js":             { "maxDuration": 300 },
+    "api/cron-backup-snapshots.js":      { "maxDuration": 30 },
+    "api/followers.js":                  { "maxDuration": 30 }
   }
 }
