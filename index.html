@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Alamo Records — IG Tracker</title>
+<title>Alamo Records — Social Tracker</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 <style>
@@ -32,6 +32,21 @@
   .roster-tabs { display: flex; gap: 6px; }
   .roster-tab { font-size: 12px; padding: 4px 12px; border-radius: 20px; cursor: pointer; border: 1px solid #ddd; background: transparent; color: #888; }
   .roster-tab.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .roster-tab-wrap { position: relative; display: inline-block; }
+  .roster-tab-wrap:hover .platform-dropdown { display: block; }
+  .platform-dropdown { display: none; position: absolute; top: 100%; left: 0; padding-top: 4px; min-width: 130px; z-index: 100; }
+  .platform-dropdown-inner { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 4px 0; }
+  .platform-dropdown-item { padding: 6px 14px; font-size: 12px; cursor: pointer; color: #666; display: flex; align-items: center; justify-content: space-between; gap: 8px; white-space: nowrap; }
+  .platform-dropdown-item:hover { background: #f5f5f5; color: #1a1a1a; }
+  .platform-dropdown-item.active-platform { color: #1a1a1a; font-weight: 500; background: #fafafa; }
+  .platform-dropdown-item .check { color: #1a1a1a; opacity: 0; font-size: 11px; }
+  .platform-dropdown-item.active-platform .check { opacity: 1; }
+  .dimmed-row td { opacity: 0.45; }
+  .dimmed-row td:nth-child(4) { opacity: 1; }
+  .edit-tt-btn { font-size: 11px; color: #666; cursor: pointer; padding: 2px 8px; border: 1px solid #ddd; border-radius: 4px; background: #fff; }
+  .edit-tt-btn:hover { background: #f0f0f0; color: #1a1a1a; }
+  .no-tt-pill { font-size: 11px; color: #aaa; font-style: italic; }
+  .tt-handle-text { font-size: 11px; color: #888; margin-left: 4px; }
   .period-btn { font-size: 11px; padding: 4px 12px; border-radius: 20px; cursor: pointer; border: 1px solid #bbb; background: #f0f0f0; color: #1a1a1a; font-weight: 500; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
   .period-btn:hover { background: #e8e8e8; border-color: #aaa; }
   .period-label { font-size: 11px; color: #bbb; margin-right: 4px; }
@@ -119,7 +134,7 @@
   <img src="/Alamo_Records.png" class="gate-logo" alt="Alamo Records" />
   <div class="gate-divider"></div>
   <div class="gate-card">
-    <div class="gate-label">Instagram Follower Tracker</div>
+    <div class="gate-label">Social Follower Tracker</div>
     <input type="password" class="gate-input" id="pw-input" placeholder="Enter password" autocomplete="off" />
     <button class="gate-btn" onclick="checkPassword()">Continue</button>
     <div class="gate-err" id="pw-err">Incorrect password — try again</div>
@@ -129,7 +144,7 @@
 <div class="app" id="main-app" style="display:none;">
   <div class="app-header">
     <img src="/Alamo_Records.png" class="app-logo" alt="Alamo Records" />
-    <h1>Instagram Follower Tracker <span class="view-badge" id="view-badge" style="display:none;">View only</span></h1>
+    <h1>Social Follower Tracker <span class="view-badge" id="view-badge" style="display:none;">View only</span></h1>
   </div>
   <p class="subtitle">Alamo Records / Santa Anna Roster</p>
   <div class="tabs">
@@ -154,8 +169,20 @@
     <p class="last-updated" id="last-updated"></p>
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
       <div class="roster-tabs">
-        <button class="roster-tab active" onclick="switchRosterTab('all')">Full roster</button>
-        <button class="roster-tab" onclick="switchRosterTab('my')">My roster</button>
+        <div class="roster-tab-wrap">
+          <button class="roster-tab active" id="full-roster-tab" onclick="switchRosterTab('all')">Full roster ▾</button>
+          <div class="platform-dropdown"><div class="platform-dropdown-inner">
+            <div class="platform-dropdown-item active-platform" id="full-platform-instagram" onclick="setPlatformAndTab('instagram', 'all'); event.stopPropagation();">Instagram <span class="check">✓</span></div>
+            <div class="platform-dropdown-item" id="full-platform-tiktok" onclick="setPlatformAndTab('tiktok', 'all'); event.stopPropagation();">TikTok <span class="check">✓</span></div>
+          </div></div>
+        </div>
+        <div class="roster-tab-wrap">
+          <button class="roster-tab" id="my-roster-tab" onclick="switchRosterTab('my')">My roster ▾</button>
+          <div class="platform-dropdown"><div class="platform-dropdown-inner">
+            <div class="platform-dropdown-item active-platform" id="my-platform-instagram" onclick="setPlatformAndTab('instagram', 'my'); event.stopPropagation();">Instagram <span class="check">✓</span></div>
+            <div class="platform-dropdown-item" id="my-platform-tiktok" onclick="setPlatformAndTab('tiktok', 'my'); event.stopPropagation();">TikTok <span class="check">✓</span></div>
+          </div></div>
+        </div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;">
         <span class="period-label">Growth period:</span>
@@ -273,11 +300,14 @@
 <script>
 const STARRED_KEY = 'ig_starred_v1';
 const STARRED_ANR_KEY = 'ig_starred_anr_v1';
+const PLATFORM_KEY = 'current_platform_v1';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 let roster = [], snapshots = [], currentSort = { field: 'growth', dir: 'desc' }, isAdmin = false, isAnr = false;
 let currentRosterTab = 'all';
+let currentPlatform = localStorage.getItem(PLATFORM_KEY) || 'instagram';
+let tiktokRoster = [], tiktokSnapshots = [], tiktokLastRefreshed = null;
 let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
 let anrStarred = new Set(JSON.parse(localStorage.getItem(STARRED_ANR_KEY) || '[]'));
 let anrRoster = [], anrSnapshots = [], anrCurrentSort = { field: 'pct', dir: 'desc' };
@@ -386,15 +416,12 @@ function renderPicker() {
 function buildPickerHTML() {
   const active = pickerFor === 'main' ? mainRange : anrRange;
   const activePresetKey = active.type === 'preset' ? active.key : null;
-
   const sidebarHTML = PRESETS.map(p =>
     `<div class="picker-preset${activePresetKey === p.key ? ' picker-preset-active' : ''}" onclick="applyPreset('${p.key}'); event.stopPropagation();">${p.label}</div>`
   ).join('');
-
   const hint = pickerStart && !pickerEnd
     ? 'Now click an end date — or click the same date for a single day'
     : 'Click a start date';
-
   return `<div class="picker-inner">
     <div class="picker-sidebar">${sidebarHTML}</div>
     <div>
@@ -409,7 +436,6 @@ function buildCalMonth(year, month) {
   const firstDow    = new Date(year, month, 1).getDay();
   const todayTs     = toStartOfDay(Date.now());
   const lo = pickerStart, hi = pickerEnd;
-
   let daysHTML = '';
   for (let i = 0; i < firstDow; i++) daysHTML += `<div class="picker-day picker-empty"></div>`;
   for (let d = 1; d <= daysInMonth; d++) {
@@ -426,7 +452,6 @@ function buildCalMonth(year, month) {
     }
     daysHTML += `<div class="${cls}" onclick="pickerClickDate(${ts}); event.stopPropagation();">${d}</div>`;
   }
-
   return `<div>
     <div class="picker-month-header">
       <button class="picker-nav" onclick="pickerNavMonth(-1); event.stopPropagation();">‹</button>
@@ -466,7 +491,7 @@ function applyDateRange(startTs, endTs, isSingleDay) {
 function applyPreset(key) {
   let range;
   if (key === 'allTime') {
-    const snaps = pickerFor === 'main' ? snapshots : anrSnapshots;
+    const snaps = pickerFor === 'main' ? (currentPlatform === 'tiktok' ? tiktokSnapshots : snapshots) : anrSnapshots;
     if (!snaps.length) return;
     range = { type: 'preset', key, label: 'All Time', startTs: snapTs(snaps[0]), endTs: snapTs(snaps[snaps.length-1]) };
   } else {
@@ -501,27 +526,22 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && pickerOpen
 function getSnapPairForRange(handle, range, snapList) {
   if (!snapList.length) return { cur: null, prev: null };
   const { startTs, endTs } = range;
-
   const endDay   = toStartOfDay(endTs);
   const startDay = toStartOfDay(startTs);
-
   let endSnap = null, startSnap = null;
   for (const snap of snapList) {
     const snapDay = toStartOfDay(snapTs(snap));
     if (snapDay <= endDay)   endSnap   = snap;
     if (snapDay <= startDay) startSnap = snap;
   }
-
   const curEntry  = endSnap   ? endSnap.data.find(d => d.handle === handle)   : null;
   const prevEntry = startSnap ? startSnap.data.find(d => d.handle === handle) : null;
-
   if (endSnap && startSnap && endSnap === startSnap) {
     const idx = snapList.indexOf(endSnap);
     const altSnap  = idx > 0 ? snapList[idx - 1] : null;
     const altEntry = altSnap ? altSnap.data.find(d => d.handle === handle) : null;
     return { cur: curEntry ? curEntry.followers : null, prev: altEntry ? altEntry.followers : null };
   }
-
   return { cur: curEntry ? curEntry.followers : null, prev: prevEntry ? prevEntry.followers : null };
 }
 
@@ -547,6 +567,7 @@ async function checkPassword() {
     if (res.ok) {
       const data = await res.json();
       sessionStorage.setItem('ig_auth', data.role);
+      if (data.role === 'admin') sessionStorage.setItem('ig_admin_pw', val);
       isAdmin = (data.role === 'admin');
       isAnr   = (data.role === 'anr');
       showApp();
@@ -558,20 +579,16 @@ function showApp() {
   document.getElementById('password-gate').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
   if (!isAdmin) {
-    // Main roster — always read-only for non-admin
     document.getElementById('admin-actions').style.display = 'none';
     document.getElementById('viewer-actions').style.display = 'flex';
     document.getElementById('add-row-el').style.display = 'none';
     document.getElementById('view-badge').style.display = 'inline';
-    // A&R — admins-only actions always hidden for non-admin
     document.getElementById('anr-admin-actions').style.display = 'none';
     document.getElementById('anr-viewer-actions').style.display = 'flex';
     if (!isAnr) {
-      // Pure viewer: hide add + bulk import
       document.getElementById('anr-add-row-el').style.display = 'none';
       document.getElementById('anr-csv-row').style.display = 'none';
     }
-    // A&R users keep anr-add-row-el and anr-csv-row visible via default CSS display
   }
   loadAll();
   if (isAnr || isAdmin) loadAnrAll();
@@ -583,7 +600,10 @@ if (savedAuth==='admin')       { isAdmin=true;  isAnr=false; showApp(); }
 else if (savedAuth==='viewer') { isAdmin=false; isAnr=false; showApp(); }
 else if (savedAuth==='anr')    { isAdmin=false; isAnr=true;  showApp(); }
 
-async function loadAll() { await Promise.all([loadRoster(), loadSnapshots()]); }
+async function loadAll() {
+  await Promise.all([loadRoster(), loadSnapshots(), loadTiktokRoster(), loadTiktokSnapshots(), loadTiktokStatus()]);
+  updatePlatformUI();
+}
 async function loadRoster() {
   try { const res=await fetch('/api/roster'); const data=await res.json(); roster=data.roster||[]; renderRoster(); updateLastUpdated(); }
   catch(e) { roster=[]; renderRoster(); }
@@ -591,6 +611,26 @@ async function loadRoster() {
 async function loadSnapshots() {
   try { const res=await fetch('/api/snapshots'); const data=await res.json(); snapshots=data.snapshots||[]; buildWeekWindows(); renderRoster(); updateLastUpdated(); }
   catch(e) { snapshots=[]; }
+}
+async function loadTiktokRoster() {
+  try { const res=await fetch('/api/tiktok-roster'); const data=await res.json(); tiktokRoster=data.roster||[]; if(currentPlatform==='tiktok') renderRoster(); }
+  catch(e) { tiktokRoster=[]; }
+}
+async function loadTiktokSnapshots() {
+  try {
+    const res=await fetch('/api/tiktok-snapshots');
+    const data=await res.json();
+    tiktokSnapshots = (data.snapshots || []).map(s => ({
+      date: s.date,
+      ts: s.ts,
+      data: Object.entries(s.artists || {}).map(([handle, info]) => ({ handle, followers: info.followers, status: info.status }))
+    }));
+    if(currentPlatform==='tiktok') renderRoster();
+  } catch(e) { tiktokSnapshots=[]; }
+}
+async function loadTiktokStatus() {
+  try { const res=await fetch('/api/tiktok-status'); const data=await res.json(); tiktokLastRefreshed=data.lastRefreshed; if(currentPlatform==='tiktok') updateLastUpdated(); }
+  catch(e) { tiktokLastRefreshed=null; }
 }
 async function loadAnrAll() {
   await Promise.all([loadAnrRoster(), loadAnrSnapshots()]);
@@ -608,7 +648,6 @@ async function loadAnrLastRefreshed() {
   const el = document.getElementById('anr-last-updated');
   if (!el) return;
   let timestamp = null;
-  // First try: /api/anr-status (set by cron)
   try {
     const res = await fetch('/api/anr-status');
     const data = await res.json();
@@ -617,7 +656,6 @@ async function loadAnrLastRefreshed() {
       if (!isNaN(d.getTime())) timestamp = d;
     }
   } catch(e){}
-  // Fallback: compute from anrRoster entries' updatedAt fields
   if (!timestamp && anrRoster.length) {
     const ts = anrRoster.filter(r => r.updatedAt).map(r => Number(r.updatedAt)).filter(t => !isNaN(t));
     if (ts.length) {
@@ -627,13 +665,48 @@ async function loadAnrLastRefreshed() {
   }
   if (timestamp) {
     el.textContent = `Last Refreshed: ${timestamp.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${timestamp.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
-  } else {
-    el.textContent = '';
-  }
+  } else { el.textContent = ''; }
+}
+
+function setPlatformAndTab(platform, tab) {
+  switchPlatform(platform);
+  switchRosterTab(tab);
+}
+function switchPlatform(platform) {
+  if (platform !== 'instagram' && platform !== 'tiktok') return;
+  currentPlatform = platform;
+  localStorage.setItem(PLATFORM_KEY, platform);
+  updatePlatformUI();
+  renderRoster();
+  updateLastUpdated();
+}
+function updatePlatformUI() {
+  ['full', 'my'].forEach(prefix => {
+    const igEl = document.getElementById(`${prefix}-platform-instagram`);
+    const ttEl = document.getElementById(`${prefix}-platform-tiktok`);
+    if (igEl) igEl.classList.toggle('active-platform', currentPlatform === 'instagram');
+    if (ttEl) ttEl.classList.toggle('active-platform', currentPlatform === 'tiktok');
+  });
+  const addRow = document.getElementById('add-row-el');
+  if (addRow) addRow.style.display = (currentPlatform === 'tiktok' || !isAdmin) ? 'none' : 'flex';
+  const refreshBtn = document.getElementById('refresh-btn');
+  if (refreshBtn) refreshBtn.style.display = currentPlatform === 'tiktok' ? 'none' : 'inline-block';
 }
 
 function updateLastUpdated() {
-  const el=document.getElementById('last-updated');
+  const el = document.getElementById('last-updated');
+  if (!el) return;
+  if (currentPlatform === 'tiktok') {
+    if (tiktokLastRefreshed) {
+      const d = new Date(tiktokLastRefreshed);
+      if (!isNaN(d.getTime())) {
+        el.textContent = `TikTok Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
+        return;
+      }
+    }
+    el.textContent = 'TikTok cron runs daily at 10:40 AM EDT';
+    return;
+  }
   const timestamps=roster.filter(r=>r.updatedAt).map(r=>Number(r.updatedAt)).filter(t=>!isNaN(t));
   if(timestamps.length){ const d=new Date(Math.max(...timestamps)); if(!isNaN(d.getTime())){ el.textContent=`Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`; return; } }
   if(snapshots.length){ const s=snapshots[snapshots.length-1]; const d=new Date(s.ts||new Date(s.date).getTime()); if(!isNaN(d.getTime())){ el.textContent=`Last snapshot: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`; return; } }
@@ -722,6 +795,7 @@ function switchAnrRosterTab(tab){
 }
 
 function getSortedRoster(filterStarred=false){
+  if (currentPlatform === 'tiktok') return getSortedTiktokRoster(filterStarred);
   let list=[...roster].map((r,i)=>{
     const pair=getSnapPairForRange(r.handle, mainRange, snapshots);
     const cur=pair.cur??r.followers;
@@ -738,6 +812,31 @@ function getSortedRoster(filterStarred=false){
     else{av=a.handle||'';bv=b.handle||'';}
     if(av<bv)return currentSort.dir==='asc'?-1:1;
     if(av>bv)return currentSort.dir==='asc'?1:-1;
+    return 0;
+  });
+}
+function getSortedTiktokRoster(filterStarred=false){
+  let list = roster.map((igArtist, i) => {
+    const ttData = tiktokRoster.find(t => t.handle === igArtist.handle) || {};
+    return { ...igArtist, ...ttData, _origIndex: i };
+  });
+  list = list.filter(r => r.tiktok_handle);
+  if (filterStarred) list = list.filter(r => starred.has(r.handle));
+  list = list.map(r => {
+    const pair = getSnapPairForRange(r.handle, mainRange, tiktokSnapshots);
+    const cur = pair.cur ?? r.tiktok_followers;
+    const diff = (cur != null && pair.prev != null) ? cur - pair.prev : null;
+    const p = (cur != null && pair.prev != null) ? pct(cur, pair.prev) : null;
+    return { ...r, _cur: cur, _diff: diff, _pct: p };
+  });
+  return list.sort((a, b) => {
+    let av, bv;
+    if (currentSort.field === 'followers') { av = a._cur ?? 0; bv = b._cur ?? 0; }
+    else if (currentSort.field === 'growth') { av = a._diff ?? -Infinity; bv = b._diff ?? -Infinity; }
+    else if (currentSort.field === 'pct') { av = a._pct ?? -Infinity; bv = b._pct ?? -Infinity; }
+    else { av = a.handle || ''; bv = b.handle || ''; }
+    if (av < bv) return currentSort.dir === 'asc' ? -1 : 1;
+    if (av > bv) return currentSort.dir === 'asc' ? 1 : -1;
     return 0;
   });
 }
@@ -763,6 +862,11 @@ function getSortedAnrRoster(filterStarred=false){
 }
 
 function renderRoster(){
+  if (currentPlatform === 'tiktok') renderTiktokRoster();
+  else renderInstagramRoster();
+}
+
+function renderInstagramRoster(){
   const tbody=document.getElementById('roster-body');
   const isMyRoster=currentRosterTab==='my',sorted=getSortedRoster(isMyRoster),cols=isAdmin?7:6;
   if(!roster.length){tbody.innerHTML=`<tr><td colspan="${cols}" class="muted" style="padding:12px 0;font-size:13px;">No handles added yet</td></tr>`;return;}
@@ -781,6 +885,110 @@ function renderRoster(){
     return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${removeBtn}</tr>`;
   }).join('');
 }
+
+function renderTiktokRoster(){
+  const tbody = document.getElementById('roster-body');
+  const isMyRoster = currentRosterTab === 'my';
+  const cols = isAdmin ? 7 : 6;
+  let allArtists = roster.map((igArtist, i) => {
+    const ttData = tiktokRoster.find(t => t.handle === igArtist.handle) || {};
+    return { ...igArtist, ...ttData, _origIndex: i };
+  });
+  if (isMyRoster) allArtists = allArtists.filter(r => starred.has(r.handle));
+  if (!allArtists.length) {
+    tbody.innerHTML = `<tr><td colspan="${cols}" class="muted" style="padding:12px 0;font-size:13px;">${isMyRoster ? 'No starred artists yet — click ☆ next to any artist to add them here.' : 'No artists in roster'}</td></tr>`;
+    return;
+  }
+  allArtists = allArtists.map(r => {
+    if (!r.tiktok_handle) return { ...r, _cur: null, _diff: null, _pct: null, _hasHandle: false };
+    const pair = getSnapPairForRange(r.handle, mainRange, tiktokSnapshots);
+    const cur = pair.cur ?? r.tiktok_followers;
+    const diff = (cur != null && pair.prev != null) ? cur - pair.prev : null;
+    const p = (cur != null && pair.prev != null) ? pct(cur, pair.prev) : null;
+    return { ...r, _cur: cur, _diff: diff, _pct: p, _hasHandle: true };
+  });
+  const withHandle = allArtists.filter(r => r._hasHandle).sort((a, b) => {
+    let av, bv;
+    if (currentSort.field === 'followers') { av = a._cur ?? 0; bv = b._cur ?? 0; }
+    else if (currentSort.field === 'growth') { av = a._diff ?? -Infinity; bv = b._diff ?? -Infinity; }
+    else if (currentSort.field === 'pct') { av = a._pct ?? -Infinity; bv = b._pct ?? -Infinity; }
+    else { av = a.handle || ''; bv = b.handle || ''; }
+    if (av < bv) return currentSort.dir === 'asc' ? -1 : 1;
+    if (av > bv) return currentSort.dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  const withoutHandle = allArtists.filter(r => !r._hasHandle).sort((a, b) => (a.handle || '').localeCompare(b.handle || ''));
+  let rank = 0;
+  const rows = [...withHandle, ...withoutHandle].map(r => {
+    const isStarred = starred.has(r.handle);
+    const igUrl = `https://www.instagram.com/${r.handle}/`;
+    if (!r._hasHandle) {
+      const editBtn = isAdmin
+        ? `<button class="edit-tt-btn" onclick="setTiktokHandle('${r.handle}')">+ Add TikTok</button>`
+        : '<span class="no-tt-pill">No TikTok linked</span>';
+      const avatarHtml = `<span class="avatar-placeholder"></span>`;
+      const editCell = isAdmin ? '<td></td>' : '';
+      return `<tr class="dimmed-row"><td><span class="rank">—</span></td><td><button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${r.handle}')">${isStarred ? '★' : '☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></div></td><td colspan="3" style="text-align:left;">${editBtn}</td>${editCell}</tr>`;
+    }
+    rank++;
+    const ttUrl = `https://www.tiktok.com/@${r.tiktok_handle}`;
+    const fc = (r.tiktok_status === 'ok' || r.tiktok_followers != null)
+      ? `<strong>${fmt(r._cur ?? r.tiktok_followers)}</strong>`
+      : (r.tiktok_status === 'pending' ? '<span class="muted">pending first cron</span>' : '<span class="pill-err">error</span>');
+    const picUrl = r.tiktok_profilePic ? proxyUrl(r.tiktok_profilePic) : '';
+    const avatarHtml = picUrl ? `<img src="${picUrl}" class="avatar" alt="" onerror="this.outerHTML='<span class=\\'avatar-placeholder\\'></span>'" />` : `<span class="avatar-placeholder"></span>`;
+    const editBtn = isAdmin ? `<td style="text-align:right"><button class="edit-tt-btn" onclick="setTiktokHandle('${r.handle}')" title="Edit TikTok handle">✎</button></td>` : '';
+    const ttHandleDisplay = r.tiktok_handle !== r.handle ? ` <span class="tt-handle-text">(@${r.tiktok_handle})</span>` : '';
+    return `<tr><td><span class="rank">${rank}</span></td><td><button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${r.handle}')">${isStarred ? '★' : '☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${ttUrl}" target="_blank">@${r.handle}</a>${ttHandleDisplay}</div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${editBtn}</tr>`;
+  });
+  tbody.innerHTML = rows.join('');
+}
+
+function setTiktokHandle(igHandle) {
+  const ttArtist = tiktokRoster.find(a => a.handle === igHandle);
+  const current = ttArtist?.tiktok_handle || '';
+  const promptMsg = current
+    ? `TikTok handle for @${igHandle} (leave blank to clear):`
+    : `Enter TikTok handle for @${igHandle} (without @):`;
+  const val = prompt(promptMsg, current);
+  if (val === null) return;
+  saveTiktokHandle(igHandle, val.trim());
+}
+
+async function saveTiktokHandle(igHandle, tiktokHandle) {
+  const adminPw = sessionStorage.getItem('ig_admin_pw');
+  if (!adminPw) {
+    showErr('Admin session expired. Please log out and log in again to add TikTok handles.');
+    return;
+  }
+  const ind = document.getElementById('saving-indicator');
+  if (ind) ind.style.display = 'inline';
+  try {
+    const res = await fetch('/api/update-tiktok-handle', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        password: adminPw,
+        handle: igHandle,
+        tiktok_handle: tiktokHandle === '' ? null : tiktokHandle
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      showErr('Failed to save: ' + (data.error || 'Unknown error'));
+    } else {
+      await loadTiktokRoster();
+      renderRoster();
+      if (data.fetch_error) {
+        showErr(`Saved handle, but TikTok lookup failed: ${data.fetch_error}. Will retry on next cron run.`);
+      }
+    }
+  } catch (e) {
+    showErr('Save failed: ' + e.message);
+  }
+  if (ind) ind.style.display = 'none';
+}
+
 function renderAnrRoster(){
   const tbody=document.getElementById('anr-roster-body');
   const isMyRoster=currentAnrRosterTab==='my';
@@ -1006,6 +1214,7 @@ function exportReport(){
 function getFileDateStr(){const d=new Date();return`${d.toLocaleString('en-US',{month:'short'})}-${d.getDate()}-${d.getFullYear()}`;}
 
 function downloadCSV(){
+  if (currentPlatform === 'tiktok') return downloadTiktokCSV();
   const sorted=getSortedRoster(currentRosterTab==='my');
   let csv='Rank,Handle,Followers,Follower Growth,Follower Growth %\n';
   sorted.forEach((r,idx)=>{
@@ -1014,6 +1223,16 @@ function downloadCSV(){
     csv+=`${idx+1},@${r.handle},${r._cur??r.followers??''},${growth},${growthPct}\n`;
   });
   const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
+}
+function downloadTiktokCSV(){
+  const sorted=getSortedTiktokRoster(currentRosterTab==='my');
+  let csv='Rank,Artist,TikTok Handle,Followers,Follower Growth,Follower Growth %\n';
+  sorted.forEach((r,idx)=>{
+    const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';
+    const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';
+    csv+=`${idx+1},@${r.handle},@${r.tiktok_handle},${r._cur??r.tiktok_followers??''},${growth},${growthPct}\n`;
+  });
+  const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Alamo-Santa-Anna-TikTok-Report-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
 }
 function anrDownloadCSV(){
   const sorted=getSortedAnrRoster(currentAnrRosterTab==='my');
@@ -1026,6 +1245,7 @@ function anrDownloadCSV(){
   const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Alamo-ANR-Report-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
 }
 function downloadPDF(){
+  if (currentPlatform === 'tiktok') return downloadTiktokPDF();
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
   const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
   const sorted=getSortedRoster(currentRosterTab==='my');
@@ -1039,6 +1259,21 @@ function downloadPDF(){
   });
   doc.autoTable({startY:34,head:[['#','Handle','Followers','Follower Growth','Follower Growth %']],body:tableData,styles:{fontSize:10,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:12},1:{cellWidth:60},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:40}}});
   doc.save(`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.pdf`);
+}
+function downloadTiktokPDF(){
+  const{jsPDF}=window.jspdf;const doc=new jsPDF();
+  const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const sorted=getSortedTiktokRoster(currentRosterTab==='my');
+  doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('TikTok Follower Report',14,20);
+  doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(120);
+  doc.text(`Alamo Records / Santa Anna Roster — ${today}`,14,28);doc.setTextColor(0);
+  const tableData=sorted.map((r,idx)=>{
+    const growth=r._diff!==null?(r._diff>=0?'+':'')+Number(r._diff).toLocaleString():'—';
+    const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'—';
+    return[idx+1,`@${r.handle}`,`@${r.tiktok_handle}`,fmt(r._cur??r.tiktok_followers),growth,growthPct];
+  });
+  doc.autoTable({startY:34,head:[['#','Artist','TikTok','Followers','Growth','Growth %']],body:tableData,styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:10},1:{cellWidth:45},2:{cellWidth:45},3:{cellWidth:30},4:{cellWidth:32},5:{cellWidth:32}}});
+  doc.save(`Alamo-Santa-Anna-TikTok-Report-${getFileDateStr()}.pdf`);
 }
 function anrDownloadPDF(){
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
@@ -1093,6 +1328,7 @@ function switchTab(tab){
       document.getElementById('view-anr').innerHTML=`<div style="margin-top:3rem;text-align:center;color:#aaa;font-size:14px;">🔒 A&R access is restricted.<br><span style="font-size:12px;margin-top:6px;display:block;">Contact your admin for access.</span></div>`;
     } else { loadAnrLastRefreshed(); if(!anrRoster.length)loadAnrAll(); }
   }
+  if(tab==='live'){ updatePlatformUI(); renderRoster(); updateLastUpdated(); }
   if(tab==='report')renderReport();
   closePicker();
 }
