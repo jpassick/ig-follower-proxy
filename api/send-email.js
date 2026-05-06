@@ -11,6 +11,7 @@ export default async function handler(req, res) {
 
   if (!url || !token || !resendKey) return res.status(500).json({ error: 'Missing config' });
 
+  // Fetch snapshots
   const snapRes = await fetch(`${url}/get/snapshots`, {
     headers: { Authorization: `Bearer ${token}` }
   });
@@ -24,6 +25,25 @@ export default async function handler(req, res) {
   }
 
   if (!snapshots.length) return res.status(400).json({ error: 'No snapshots to report on' });
+
+  // Fetch roster to know which artists are fan pages
+  const rosterRes = await fetch(`${url}/get/roster`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const rosterData = await rosterRes.json();
+  let roster = [];
+  if (rosterData.result) {
+    let val = rosterData.result;
+    while (typeof val === 'string') { try { val = JSON.parse(val); } catch(e) { break; } }
+    if (Array.isArray(val) && val.length === 1 && typeof val[0] === 'string') { try { val = JSON.parse(val[0]); } catch(e) {} }
+    if (Array.isArray(val)) roster = val;
+  }
+
+  const fanPageHandles = new Set(
+    roster
+      .filter(a => a && a.is_fan_page === true && typeof a.handle === 'string')
+      .map(a => a.handle.toLowerCase())
+  );
 
   const latest = snapshots[snapshots.length - 1];
 
@@ -69,9 +89,13 @@ export default async function handler(req, res) {
     const pctSign = d.pct >= 0 ? '+' : '';
     const diffStr = d.diff !== null ? `${diffSign}${Number(d.diff).toLocaleString()}` : '—';
     const pctStr = d.pct !== null ? `${pctSign}${d.pct.toFixed(2)}%` : '—';
+    const isFan = fanPageHandles.has((d.handle || '').toLowerCase());
+    const fanTag = isFan
+      ? ` <span style="font-size:9px;background:#f0f0f0;color:#888;border-radius:10px;padding:2px 7px;letter-spacing:0.05em;font-weight:600;text-transform:uppercase;margin-left:4px;">FAN</span>`
+      : '';
     return `<tr>
       <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:13px;">
-        <a href="https://www.instagram.com/${d.handle}/" style="color:#1a1a1a;text-decoration:none;">@${d.handle}</a>
+        <a href="https://www.instagram.com/${d.handle}/" style="color:#1a1a1a;text-decoration:none;">@${d.handle}</a>${fanTag}
       </td>
       <td style="padding:8px 12px;border-bottom:1px solid #eee;font-weight:600;font-size:13px;">${fmt(d.followers)}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #eee;color:${color};font-size:13px;">${pctStr}</td>
