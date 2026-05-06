@@ -47,6 +47,12 @@
   .edit-tt-btn:hover { background: #f0f0f0; color: #1a1a1a; }
   .no-tt-pill { font-size: 11px; color: #aaa; font-style: italic; }
   .tt-handle-text { font-size: 11px; color: #888; margin-left: 4px; }
+  .fan-pill { font-size: 9px; background: #f0f0f0; color: #888; border-radius: 10px; padding: 2px 7px; letter-spacing: 0.05em; font-weight: 600; text-transform: uppercase; margin-left: 6px; }
+  .fan-toggle-btn { font-size: 9px; padding: 2px 7px; border-radius: 10px; cursor: pointer; letter-spacing: 0.05em; font-weight: 600; text-transform: uppercase; margin-left: 6px; line-height: 1.4; }
+  .fan-toggle-btn.fan-flagged { background: #f0f0f0; color: #888; border: 1px solid #f0f0f0; }
+  .fan-toggle-btn.fan-flagged:hover { background: #e8e8e8; border-color: #e8e8e8; }
+  .fan-toggle-btn.fan-unflagged { background: #fff; color: #ccc; border: 1px solid #eee; }
+  .fan-toggle-btn.fan-unflagged:hover { color: #888; border-color: #ddd; }
   .period-btn { font-size: 11px; padding: 4px 12px; border-radius: 20px; cursor: pointer; border: 1px solid #bbb; background: #f0f0f0; color: #1a1a1a; font-weight: 500; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
   .period-btn:hover { background: #e8e8e8; border-color: #aaa; }
   .period-label { font-size: 11px; color: #bbb; margin-right: 4px; }
@@ -882,7 +888,7 @@ function renderInstagramRoster(){
     const picUrl=r.profilePic?proxyUrl(r.profilePic):'';
     const avatarHtml=picUrl?`<img src="${picUrl}" class="avatar" alt="" onerror="this.outerHTML='<span class=\\'avatar-placeholder\\'></span>'" />`:`<span class="avatar-placeholder"></span>`;
     const removeBtn=isAdmin?`<td style="text-align:right"><button class="danger" onclick="removeHandle(${i})">✕</button></td>`:'';
-    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${removeBtn}</tr>`;
+    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a>${renderFanBadge(r)}</div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${removeBtn}</tr>`;
   }).join('');
 }
 
@@ -928,7 +934,7 @@ function renderTiktokRoster(){
         : '<span class="no-tt-pill">No TikTok linked</span>';
       const avatarHtml = `<span class="avatar-placeholder"></span>`;
       const editCell = isAdmin ? '<td></td>' : '';
-      return `<tr class="dimmed-row"><td><span class="rank">—</span></td><td><button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${r.handle}')">${isStarred ? '★' : '☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a></div></td><td colspan="3" style="text-align:left;">${editBtn}</td>${editCell}</tr>`;
+      return `<tr class="dimmed-row"><td><span class="rank">—</span></td><td><button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${r.handle}')">${isStarred ? '★' : '☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a>${renderFanBadge(r)}</div></td><td colspan="3" style="text-align:left;">${editBtn}</td>${editCell}</tr>`;
     }
     rank++;
     const ttUrl = `https://www.tiktok.com/@${r.tiktok_handle}`;
@@ -939,7 +945,7 @@ function renderTiktokRoster(){
     const avatarHtml = picUrl ? `<img src="${picUrl}" class="avatar" alt="" onerror="this.outerHTML='<span class=\\'avatar-placeholder\\'></span>'" />` : `<span class="avatar-placeholder"></span>`;
     const editBtn = isAdmin ? `<td style="text-align:right"><button class="edit-tt-btn" onclick="setTiktokHandle('${r.handle}')" title="Edit TikTok handle">✎</button></td>` : '';
     const ttHandleDisplay = r.tiktok_handle !== r.handle ? ` <span class="tt-handle-text">(@${r.tiktok_handle})</span>` : '';
-    return `<tr><td><span class="rank">${rank}</span></td><td><button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${r.handle}')">${isStarred ? '★' : '☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${ttUrl}" target="_blank">@${r.handle}</a>${ttHandleDisplay}</div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${editBtn}</tr>`;
+    return `<tr><td><span class="rank">${rank}</span></td><td><button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${r.handle}')">${isStarred ? '★' : '☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${ttUrl}" target="_blank">@${r.handle}</a>${ttHandleDisplay}${renderFanBadge(r)}</div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${editBtn}</tr>`;
   });
   tbody.innerHTML = rows.join('');
 }
@@ -982,6 +988,60 @@ async function saveTiktokHandle(igHandle, tiktokHandle) {
       if (data.fetch_error) {
         showErr(`Saved handle, but TikTok lookup failed: ${data.fetch_error}. Will retry on next cron run.`);
       }
+    }
+  } catch (e) {
+    showErr('Save failed: ' + e.message);
+  }
+  if (ind) ind.style.display = 'none';
+}
+
+function renderFanBadge(r) {
+  const isFan = r.is_fan_page === true;
+  if (isAdmin) {
+    const cls = isFan ? 'fan-flagged' : 'fan-unflagged';
+    const label = isFan ? 'FAN' : '+ FAN';
+    const title = isFan ? 'Click to unmark as fan page' : 'Click to mark as fan page';
+    return `<button class="fan-toggle-btn ${cls}" onclick="toggleFanPageFlag('${r.handle}')" title="${title}">${label}</button>`;
+  }
+  return isFan ? `<span class="fan-pill">FAN</span>` : '';
+}
+
+function toggleFanPageFlag(igHandle) {
+  const artist = roster.find(a => a.handle === igHandle);
+  if (!artist) return;
+  const currentlyFan = artist.is_fan_page === true;
+  const msg = currentlyFan
+    ? `Remove fan-page flag from @${igHandle}? It will no longer show the FAN badge.`
+    : `Mark @${igHandle} as a fan page? A FAN badge will appear next to its name.`;
+  if (!confirm(msg)) return;
+  saveFanPageFlag(igHandle, !currentlyFan);
+}
+
+async function saveFanPageFlag(igHandle, isFanPage) {
+  const adminPw = sessionStorage.getItem('ig_admin_pw');
+  if (!adminPw) {
+    showErr('Admin session expired. Please log out and log in again to update fan-page flags.');
+    return;
+  }
+  const ind = document.getElementById('saving-indicator');
+  if (ind) ind.style.display = 'inline';
+  try {
+    const res = await fetch('/api/update-fan-page-flag', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        password: adminPw,
+        handle: igHandle,
+        isFanPage: isFanPage
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      showErr('Failed to save: ' + (data.error || 'Unknown error'));
+    } else {
+      const idx = roster.findIndex(a => a.handle === igHandle);
+      if (idx !== -1) roster[idx].is_fan_page = isFanPage;
+      renderRoster();
     }
   } catch (e) {
     showErr('Save failed: ' + e.message);
