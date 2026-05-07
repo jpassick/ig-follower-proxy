@@ -8,10 +8,10 @@ export default async function handler(req, res) {
   const url = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
   const adminPassword = process.env.ADMIN_PASSWORD;
-  const apiKey = process.env.TIKTOK_RAPIDAPI_KEY;
+  const smmKey = process.env.SMM_RAPIDAPI_KEY;
   if (!url || !token) return res.status(500).json({ error: 'Redis not configured' });
   if (!adminPassword) return res.status(500).json({ error: 'ADMIN_PASSWORD not configured' });
-  if (!apiKey) return res.status(500).json({ error: 'TIKTOK_RAPIDAPI_KEY not configured' });
+  if (!smmKey) return res.status(500).json({ error: 'SMM_RAPIDAPI_KEY not configured' });
 
   let body = req.body;
   if (typeof body === 'string') {
@@ -67,7 +67,10 @@ export default async function handler(req, res) {
     return res.status(404).json({ error: `Artist not found in roster: ${igHandle}` });
   }
 
-  // If clearing handle, just save null and return
+  const oldHandle = roster[idx].tiktok_handle ?? null;
+  const handleChanged = oldHandle !== newTiktokHandle;
+
+  // If clearing handle, save nulls and return
   if (newTiktokHandle === null) {
     roster[idx] = {
       ...roster[idx],
@@ -76,7 +79,8 @@ export default async function handler(req, res) {
       tiktok_profilePic: null,
       tiktok_followers: null,
       tiktok_status: null,
-      tiktok_lastUpdated: Date.now()
+      tiktok_lastUpdated: Date.now(),
+      tiktok_masterID: null
     };
 
     const clean = roster.filter(a => a && typeof a.handle === 'string' && a.handle.length > 0);
@@ -97,54 +101,58 @@ export default async function handler(req, res) {
     });
   }
 
-  // Otherwise, fetch TikTok data immediately so photo + follower count populate
+  // Otherwise, fetch from SMM immediately so masterID + photo + follower count populate
   let fetchedData = null;
   let fetchError = null;
+  const tiktokUrl = `https://www.tiktok.com/@${newTiktokHandle}`;
+  const apiUrl = `https://social-media-master.p.rapidapi.com/tiktok-user-account?url=${encodeURIComponent(tiktokUrl)}`;
+
   try {
-    const tiktokR = await fetch(
-      `https://tiktok-best-experience.p.rapidapi.com/user/${encodeURIComponent(newTiktokHandle)}`,
-      {
-        headers: {
-          'x-rapidapi-host': 'tiktok-best-experience.p.rapidapi.com',
-          'x-rapidapi-key': apiKey
-        }
+    const smmR = await fetch(apiUrl, {
+      headers: {
+        'x-rapidapi-host': 'social-media-master.p.rapidapi.com',
+        'x-rapidapi-key': smmKey,
+        'Content-Type': 'application/json'
       }
-    );
+    });
 
-    if (tiktokR.ok) {
-      const tiktokJson = await tiktokR.json();
-      if (tiktokJson.status === 'ok' && tiktokJson.data?.status_code === 0 && tiktokJson.data?.user) {
-        const u = tiktokJson.data.user;
-        let avatarUrl = null;
-        if (u.avatar_300x300?.url_list?.length > 0) avatarUrl = u.avatar_300x300.url_list[0];
-        else if (u.avatar_medium?.url_list?.length > 0) avatarUrl = u.avatar_medium.url_list[0];
-        else if (u.avatar_thumb?.url_list?.length > 0) avatarUrl = u.avatar_thumb.url_list[0];
-
+    if (smmR.ok) {
+      const smmJson = await smmR.json();
+      if (smmJson?.profile && smmJson?.stats) {
         fetchedData = {
-          followers: u.follower_count ?? 0,
-          nickname: u.nickname ?? newTiktokHandle,
-          avatar_url: avatarUrl
+          masterID: smmJson.profile.masterID || null,
+          followers: smmJson.stats.followersCount ?? 0,
+          nickname: smmJson.profile.name ?? newTiktokHandle,
+          avatar_url: smmJson.profile.image ?? null
         };
       } else {
-        fetchError = `TikTok API returned no user data for "${newTiktokHandle}"`;
+        fetchError = `SMM API returned 200 but missing profile/stats for "${newTiktokHandle}"`;
       }
     } else {
-      fetchError = `RapidAPI returned status ${tiktokR.status}`;
+      fetchError = `RapidAPI returned status ${smmR.status}`;
     }
   } catch (err) {
     fetchError = `Fetch failed: ${err.message}`;
   }
+
+  // When handle changes and fetch fails, old values would be stale (belong to previous handle).
+  // Null them out to force fresh resolution on next cron run.
+  const preservedNickname  = handleChanged ? null : (roster[idx].tiktok_nickname ?? null);
+  const preservedProfilePic = handleChanged ? null : (roster[idx].tiktok_profilePic ?? null);
+  const preservedFollowers  = handleChanged ? null : (roster[idx].tiktok_followers ?? null);
+  const preservedMasterID   = handleChanged ? null : (roster[idx].tiktok_masterID ?? null);
 
   // Update roster with handle (and data if fetched successfully)
   const now = Date.now();
   roster[idx] = {
     ...roster[idx],
     tiktok_handle: newTiktokHandle,
-    tiktok_nickname: fetchedData?.nickname ?? roster[idx].tiktok_nickname ?? null,
-    tiktok_profilePic: fetchedData?.avatar_url ?? roster[idx].tiktok_profilePic ?? null,
-    tiktok_followers: fetchedData?.followers ?? roster[idx].tiktok_followers ?? null,
+    tiktok_nickname: fetchedData?.nickname ?? preservedNickname,
+    tiktok_profilePic: fetchedData?.avatar_url ?? preservedProfilePic,
+    tiktok_followers: fetchedData?.followers ?? preservedFollowers,
     tiktok_status: fetchedData ? 'ok' : 'pending',
-    tiktok_lastUpdated: now
+    tiktok_lastUpdated: now,
+    tiktok_masterID: fetchedData?.masterID ?? preservedMasterID
   };
 
   const clean = roster.filter(a => a && typeof a.handle === 'string' && a.handle.length > 0);
