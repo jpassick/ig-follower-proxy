@@ -49,10 +49,11 @@
     { "path": "/api/cron-backup-snapshots", "schedule": "0 4 * * *" }
   ],
   "functions": {
-    "api/cron-snapshot-daily.js":        { "maxDuration": 300 },
-    "api/cron-tiktok-snapshot-daily.js": { "maxDuration": 300 },
-    "api/cron-anr-batch.js":             { "maxDuration": 300 },
-    "api/cron-backup-snapshots.js":      { "maxDuration": 30 },
-    "api/followers.js":                  { "maxDuration": 30 }
+    "api/cron-snapshot-daily.js":           { "maxDuration": 300 },
+    "api/cron-tiktok-snapshot-daily.js":    { "maxDuration": 300 },
+    "api/cron-anr-batch.js":                { "maxDuration": 300 },
+    "api/cron-backup-snapshots.js":         { "maxDuration": 30 },
+    "api/followers.js":                     { "maxDuration": 30 },
+    "api/migrate-tiktok-masterids.js":      { "maxDuration": 300 }
   }
 }
