@@ -161,7 +161,7 @@
 
   <div id="view-live">
     <div class="top-actions" id="admin-actions">
-      <button class="secondary" id="refresh-btn" onclick="refreshAll()">↻ Refresh all</button>
+      <button class="secondary" id="refresh-btn" onclick="refreshAll()">↻ Refresh Instagram</button>
       <button class="secondary" onclick="downloadCSV()">↓ Download CSV</button>
       <button class="secondary" onclick="downloadPDF()">↓ Download PDF</button>
       <button class="secondary" onclick="sendEmailNow()">✉ Send email update</button>
@@ -180,6 +180,9 @@
           <div class="platform-dropdown"><div class="platform-dropdown-inner">
             <div class="platform-dropdown-item active-platform" id="full-platform-instagram" onclick="setPlatformAndTab('instagram', 'all'); event.stopPropagation();">Instagram <span class="check">✓</span></div>
             <div class="platform-dropdown-item" id="full-platform-tiktok" onclick="setPlatformAndTab('tiktok', 'all'); event.stopPropagation();">TikTok <span class="check">✓</span></div>
+            <div class="platform-dropdown-item" id="full-platform-youtube" onclick="setPlatformAndTab('youtube', 'all'); event.stopPropagation();">YouTube <span class="check">✓</span></div>
+            <div class="platform-dropdown-item" id="full-platform-twitter" onclick="setPlatformAndTab('twitter', 'all'); event.stopPropagation();">X <span class="check">✓</span></div>
+            <div class="platform-dropdown-item" id="full-platform-facebook" onclick="setPlatformAndTab('facebook', 'all'); event.stopPropagation();">Facebook <span class="check">✓</span></div>
           </div></div>
         </div>
         <div class="roster-tab-wrap">
@@ -187,6 +190,9 @@
           <div class="platform-dropdown"><div class="platform-dropdown-inner">
             <div class="platform-dropdown-item active-platform" id="my-platform-instagram" onclick="setPlatformAndTab('instagram', 'my'); event.stopPropagation();">Instagram <span class="check">✓</span></div>
             <div class="platform-dropdown-item" id="my-platform-tiktok" onclick="setPlatformAndTab('tiktok', 'my'); event.stopPropagation();">TikTok <span class="check">✓</span></div>
+            <div class="platform-dropdown-item" id="my-platform-youtube" onclick="setPlatformAndTab('youtube', 'my'); event.stopPropagation();">YouTube <span class="check">✓</span></div>
+            <div class="platform-dropdown-item" id="my-platform-twitter" onclick="setPlatformAndTab('twitter', 'my'); event.stopPropagation();">X <span class="check">✓</span></div>
+            <div class="platform-dropdown-item" id="my-platform-facebook" onclick="setPlatformAndTab('facebook', 'my'); event.stopPropagation();">Facebook <span class="check">✓</span></div>
           </div></div>
         </div>
       </div>
@@ -310,10 +316,29 @@ const PLATFORM_KEY = 'current_platform_v1';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
+// Platform configuration — all 5 supported platforms
+const PLATFORMS = {
+  instagram: { label: 'Instagram', profileUrl: h => `https://www.instagram.com/${h}/`, isMain: true },
+  tiktok:    { label: 'TikTok',    profileUrl: h => `https://www.tiktok.com/@${h}`,    isMain: false, prefix: 'tiktok' },
+  youtube:   { label: 'YouTube',   profileUrl: h => `https://www.youtube.com/@${h}`,   isMain: false, prefix: 'youtube' },
+  twitter:   { label: 'X',         profileUrl: h => `https://x.com/${h}`,              isMain: false, prefix: 'twitter' },
+  facebook:  { label: 'Facebook',  profileUrl: h => `https://www.facebook.com/${h}`,   isMain: false, prefix: 'facebook' }
+};
+const SOCIAL_PLATFORMS = ['tiktok', 'youtube', 'twitter', 'facebook']; // non-IG
+
 let roster = [], snapshots = [], currentSort = { field: 'growth', dir: 'desc' }, isAdmin = false, isAnr = false;
 let currentRosterTab = 'all';
 let currentPlatform = localStorage.getItem(PLATFORM_KEY) || 'instagram';
-let tiktokRoster = [], tiktokSnapshots = [], tiktokLastRefreshed = null;
+if (!PLATFORMS[currentPlatform]) currentPlatform = 'instagram';
+
+// Per-platform data store (snapshots + lastRefreshed) for non-IG platforms
+const platformData = {
+  tiktok:   { snapshots: [], lastRefreshed: null },
+  youtube:  { snapshots: [], lastRefreshed: null },
+  twitter:  { snapshots: [], lastRefreshed: null },
+  facebook: { snapshots: [], lastRefreshed: null }
+};
+
 let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
 let anrStarred = new Set(JSON.parse(localStorage.getItem(STARRED_ANR_KEY) || '[]'));
 let anrRoster = [], anrSnapshots = [], anrCurrentSort = { field: 'pct', dir: 'desc' };
@@ -363,41 +388,27 @@ const PRESETS = [
   { key:'allTime',   label:'All Time' },
 ];
 
-function toStartOfDay(ts) {
-  const d = new Date(ts);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
+function toStartOfDay(ts) { const d = new Date(ts); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
 function toEndOfDay(ts) { return toStartOfDay(ts) + DAY_MS - 1; }
 function fmtShortDate(ts) { return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
 function fmtShort(ts) { return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
 
-function initPickerMonth() {
-  const now = new Date();
-  pickerMonth = now.getMonth();
-  pickerYear  = now.getFullYear();
-}
+function initPickerMonth() { const now = new Date(); pickerMonth = now.getMonth(); pickerYear = now.getFullYear(); }
 initPickerMonth();
 
 function openPicker(forTab, btnEl) {
   if (pickerOpen && pickerFor === forTab) { closePicker(); return; }
   pickerFor = forTab;
   const active = forTab === 'main' ? mainRange : anrRange;
-  if (active.type === 'single') {
-    pickerStart = toStartOfDay(active.ts); pickerEnd = null;
-  } else if (active.type === 'range') {
-    pickerStart = toStartOfDay(active.startTs); pickerEnd = toStartOfDay(active.endTs);
-  } else {
-    pickerStart = null; pickerEnd = null;
-  }
+  if (active.type === 'single') { pickerStart = toStartOfDay(active.ts); pickerEnd = null; }
+  else if (active.type === 'range') { pickerStart = toStartOfDay(active.startTs); pickerEnd = toStartOfDay(active.endTs); }
+  else { pickerStart = null; pickerEnd = null; }
   if (active.type !== 'single' && active.type !== 'range') initPickerMonth();
   renderAndShowPicker(btnEl);
   pickerOpen = true;
 }
 
-function closePicker() {
-  document.getElementById('date-picker-panel').style.display = 'none';
-  pickerOpen = false;
-}
+function closePicker() { document.getElementById('date-picker-panel').style.display = 'none'; pickerOpen = false; }
 
 function renderAndShowPicker(anchorEl) {
   const panel = document.getElementById('date-picker-panel');
@@ -477,14 +488,9 @@ function pickerNavMonth(dir) {
 }
 
 function pickerClickDate(ts) {
-  if (!pickerStart || pickerEnd !== null) {
-    pickerStart = ts; pickerEnd = null;
-    renderPicker();
-  } else if (ts === pickerStart) {
-    applyDateRange(ts, ts, true);
-  } else {
-    applyDateRange(Math.min(pickerStart, ts), Math.max(pickerStart, ts), false);
-  }
+  if (!pickerStart || pickerEnd !== null) { pickerStart = ts; pickerEnd = null; renderPicker(); }
+  else if (ts === pickerStart) { applyDateRange(ts, ts, true); }
+  else { applyDateRange(Math.min(pickerStart, ts), Math.max(pickerStart, ts), false); }
 }
 
 function applyDateRange(startTs, endTs, isSingleDay) {
@@ -497,7 +503,7 @@ function applyDateRange(startTs, endTs, isSingleDay) {
 function applyPreset(key) {
   let range;
   if (key === 'allTime') {
-    const snaps = pickerFor === 'main' ? (currentPlatform === 'tiktok' ? tiktokSnapshots : snapshots) : anrSnapshots;
+    const snaps = pickerFor === 'main' ? getSnapshotsForPlatform(currentPlatform) : anrSnapshots;
     if (!snaps.length) return;
     range = { type: 'preset', key, label: 'All Time', startTs: snapTs(snaps[0]), endTs: snapTs(snaps[snaps.length-1]) };
   } else {
@@ -509,13 +515,8 @@ function applyPreset(key) {
 }
 
 function setActiveRange(range) {
-  if (pickerFor === 'main') {
-    mainRange = range;
-    document.getElementById('main-period-label').textContent = range.label;
-  } else {
-    anrRange = range;
-    document.getElementById('anr-period-label').textContent = range.label;
-  }
+  if (pickerFor === 'main') { mainRange = range; document.getElementById('main-period-label').textContent = range.label; }
+  else { anrRange = range; document.getElementById('anr-period-label').textContent = range.label; }
   closePicker();
   if (pickerFor === 'main') renderRoster();
   else renderAnrRoster();
@@ -528,6 +529,11 @@ document.addEventListener('click', function(e) {
   if (!panel.contains(e.target) && !btns.some(b => b && b.contains(e.target))) closePicker();
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && pickerOpen) closePicker(); });
+
+function getSnapshotsForPlatform(platform) {
+  if (platform === 'instagram') return snapshots;
+  return platformData[platform]?.snapshots || [];
+}
 
 function getSnapPairForRange(handle, range, snapList) {
   if (!snapList.length) return { cur: null, prev: null };
@@ -552,15 +558,9 @@ function getSnapPairForRange(handle, range, snapList) {
 }
 
 function saveStarred() { localStorage.setItem(STARRED_KEY, JSON.stringify([...starred])); }
-function toggleStar(handle) {
-  if(starred.has(handle)) starred.delete(handle); else starred.add(handle);
-  saveStarred(); renderRoster();
-}
+function toggleStar(handle) { if(starred.has(handle)) starred.delete(handle); else starred.add(handle); saveStarred(); renderRoster(); }
 function saveAnrStarred() { localStorage.setItem(STARRED_ANR_KEY, JSON.stringify([...anrStarred])); }
-function toggleAnrStar(handle) {
-  if(anrStarred.has(handle)) anrStarred.delete(handle); else anrStarred.add(handle);
-  saveAnrStarred(); renderAnrRoster();
-}
+function toggleAnrStar(handle) { if(anrStarred.has(handle)) anrStarred.delete(handle); else anrStarred.add(handle); saveAnrStarred(); renderAnrRoster(); }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function snapTs(s) { return s.ts || new Date(s.date).getTime(); }
 function proxyUrl(url) { if(!url) return ''; return `/api/proxy-image?url=${encodeURIComponent(url)}`; }
@@ -607,7 +607,8 @@ else if (savedAuth==='viewer') { isAdmin=false; isAnr=false; showApp(); }
 else if (savedAuth==='anr')    { isAdmin=false; isAnr=true;  showApp(); }
 
 async function loadAll() {
-  await Promise.all([loadRoster(), loadSnapshots(), loadTiktokRoster(), loadTiktokSnapshots(), loadTiktokStatus()]);
+  const platformLoaders = SOCIAL_PLATFORMS.flatMap(p => [loadPlatformSnapshots(p), loadPlatformStatus(p)]);
+  await Promise.all([loadRoster(), loadSnapshots(), ...platformLoaders]);
   updatePlatformUI();
 }
 async function loadRoster() {
@@ -618,26 +619,32 @@ async function loadSnapshots() {
   try { const res=await fetch('/api/snapshots'); const data=await res.json(); snapshots=data.snapshots||[]; buildWeekWindows(); renderRoster(); updateLastUpdated(); }
   catch(e) { snapshots=[]; }
 }
-async function loadTiktokRoster() {
-  try { const res=await fetch('/api/tiktok-roster'); const data=await res.json(); tiktokRoster=data.roster||[]; if(currentPlatform==='tiktok') renderRoster(); }
-  catch(e) { tiktokRoster=[]; }
-}
-async function loadTiktokSnapshots() {
+
+// Generic per-platform snapshot loader. TikTok still uses /api/tiktok-snapshots; YT/X/FB use /api/social-snapshots.
+async function loadPlatformSnapshots(platform) {
+  const url = platform === 'tiktok' ? '/api/tiktok-snapshots' : `/api/social-snapshots?platform=${platform}`;
   try {
-    const res=await fetch('/api/tiktok-snapshots');
-    const data=await res.json();
-    tiktokSnapshots = (data.snapshots || []).map(s => ({
+    const res = await fetch(url);
+    const data = await res.json();
+    platformData[platform].snapshots = (data.snapshots || []).map(s => ({
       date: s.date,
       ts: s.ts,
       data: Object.entries(s.artists || {}).map(([handle, info]) => ({ handle, followers: info.followers, status: info.status }))
     }));
-    if(currentPlatform==='tiktok') renderRoster();
-  } catch(e) { tiktokSnapshots=[]; }
+    if (currentPlatform === platform) renderRoster();
+  } catch(e) { platformData[platform].snapshots = []; }
 }
-async function loadTiktokStatus() {
-  try { const res=await fetch('/api/tiktok-status'); const data=await res.json(); tiktokLastRefreshed=data.lastRefreshed; if(currentPlatform==='tiktok') updateLastUpdated(); }
-  catch(e) { tiktokLastRefreshed=null; }
+
+async function loadPlatformStatus(platform) {
+  const url = platform === 'tiktok' ? '/api/tiktok-status' : `/api/social-status?platform=${platform}`;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    platformData[platform].lastRefreshed = data.lastRefreshed;
+    if (currentPlatform === platform) updateLastUpdated();
+  } catch(e) { platformData[platform].lastRefreshed = null; }
 }
+
 async function loadAnrAll() {
   await Promise.all([loadAnrRoster(), loadAnrSnapshots()]);
   await loadAnrLastRefreshed();
@@ -674,12 +681,9 @@ async function loadAnrLastRefreshed() {
   } else { el.textContent = ''; }
 }
 
-function setPlatformAndTab(platform, tab) {
-  switchPlatform(platform);
-  switchRosterTab(tab);
-}
+function setPlatformAndTab(platform, tab) { switchPlatform(platform); switchRosterTab(tab); }
 function switchPlatform(platform) {
-  if (platform !== 'instagram' && platform !== 'tiktok') return;
+  if (!PLATFORMS[platform]) return;
   currentPlatform = platform;
   localStorage.setItem(PLATFORM_KEY, platform);
   updatePlatformUI();
@@ -688,35 +692,41 @@ function switchPlatform(platform) {
 }
 function updatePlatformUI() {
   ['full', 'my'].forEach(prefix => {
-    const igEl = document.getElementById(`${prefix}-platform-instagram`);
-    const ttEl = document.getElementById(`${prefix}-platform-tiktok`);
-    if (igEl) igEl.classList.toggle('active-platform', currentPlatform === 'instagram');
-    if (ttEl) ttEl.classList.toggle('active-platform', currentPlatform === 'tiktok');
+    Object.keys(PLATFORMS).forEach(p => {
+      const el = document.getElementById(`${prefix}-platform-${p}`);
+      if (el) el.classList.toggle('active-platform', currentPlatform === p);
+    });
   });
   const addRow = document.getElementById('add-row-el');
-  if (addRow) addRow.style.display = (currentPlatform === 'tiktok' || !isAdmin) ? 'none' : 'flex';
+  if (addRow) addRow.style.display = (currentPlatform !== 'instagram' || !isAdmin) ? 'none' : 'flex';
   const refreshBtn = document.getElementById('refresh-btn');
-  if (refreshBtn) refreshBtn.style.display = currentPlatform === 'tiktok' ? 'none' : 'inline-block';
+  if (refreshBtn) {
+    refreshBtn.style.display = isAdmin ? 'inline-block' : 'none';
+    refreshBtn.textContent = `↻ Refresh ${PLATFORMS[currentPlatform].label}`;
+  }
 }
 
 function updateLastUpdated() {
   const el = document.getElementById('last-updated');
   if (!el) return;
-  if (currentPlatform === 'tiktok') {
-    if (tiktokLastRefreshed) {
-      const d = new Date(tiktokLastRefreshed);
-      if (!isNaN(d.getTime())) {
-        el.textContent = `TikTok Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
-        return;
-      }
-    }
-    el.textContent = 'TikTok cron runs daily at 10:40 AM EDT';
+  if (currentPlatform === 'instagram') {
+    const timestamps = roster.filter(r=>r.updatedAt).map(r=>Number(r.updatedAt)).filter(t=>!isNaN(t));
+    if(timestamps.length){ const d=new Date(Math.max(...timestamps)); if(!isNaN(d.getTime())){ el.textContent=`Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`; return; } }
+    if(snapshots.length){ const s=snapshots[snapshots.length-1]; const d=new Date(s.ts||new Date(s.date).getTime()); if(!isNaN(d.getTime())){ el.textContent=`Last snapshot: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`; return; } }
+    el.textContent='';
     return;
   }
-  const timestamps=roster.filter(r=>r.updatedAt).map(r=>Number(r.updatedAt)).filter(t=>!isNaN(t));
-  if(timestamps.length){ const d=new Date(Math.max(...timestamps)); if(!isNaN(d.getTime())){ el.textContent=`Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`; return; } }
-  if(snapshots.length){ const s=snapshots[snapshots.length-1]; const d=new Date(s.ts||new Date(s.date).getTime()); if(!isNaN(d.getTime())){ el.textContent=`Last snapshot: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`; return; } }
-  el.textContent='';
+  // Non-IG platforms
+  const lr = platformData[currentPlatform]?.lastRefreshed;
+  const label = PLATFORMS[currentPlatform].label;
+  if (lr) {
+    const d = new Date(lr);
+    if (!isNaN(d.getTime())) {
+      el.textContent = `${label} Last Refreshed: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'})}`;
+      return;
+    }
+  }
+  el.textContent = `${label} cron runs daily — set a handle to start tracking.`;
 }
 
 async function persistRoster() {
@@ -759,10 +769,7 @@ function buildWeekWindows() {
   }
   weekWindows=windows; currentWeekIdx=weekWindows.length-1;
 }
-function stepWeek(dir) {
-  const n=currentWeekIdx+dir; if(n<0||n>=weekWindows.length)return;
-  currentWeekIdx=n; renderReport();
-}
+function stepWeek(dir) { const n=currentWeekIdx+dir; if(n<0||n>=weekWindows.length)return; currentWeekIdx=n; renderReport(); }
 
 function fmt(n){if(n==null)return'—';if(n>=1000000)return(n/1000000).toFixed(2)+'M';if(n>=1000)return(n/1000).toFixed(1)+'K';return Number(n).toLocaleString();}
 function pct(cur,prev){if(!prev)return null;return(cur-prev)/prev*100;}
@@ -801,7 +808,6 @@ function switchAnrRosterTab(tab){
 }
 
 function getSortedRoster(filterStarred=false){
-  if (currentPlatform === 'tiktok') return getSortedTiktokRoster(filterStarred);
   let list=[...roster].map((r,i)=>{
     const pair=getSnapPairForRange(r.handle, mainRange, snapshots);
     const cur=pair.cur??r.followers;
@@ -821,16 +827,18 @@ function getSortedRoster(filterStarred=false){
     return 0;
   });
 }
-function getSortedTiktokRoster(filterStarred=false){
-  let list = roster.map((igArtist, i) => {
-    const ttData = tiktokRoster.find(t => t.handle === igArtist.handle) || {};
-    return { ...igArtist, ...ttData, _origIndex: i };
-  });
-  list = list.filter(r => r.tiktok_handle);
+
+// Generic getter for non-IG platforms — returns sorted list of artists with handle for that platform
+function getSortedSocialRoster(platform, filterStarred=false){
+  const fHandle = `${platform}_handle`;
+  const fFollowers = `${platform}_followers`;
+  const snapList = platformData[platform]?.snapshots || [];
+  let list = [...roster].map((r, i) => ({ ...r, _origIndex: i }));
+  list = list.filter(r => typeof r[fHandle] === 'string' && r[fHandle].length > 0);
   if (filterStarred) list = list.filter(r => starred.has(r.handle));
   list = list.map(r => {
-    const pair = getSnapPairForRange(r.handle, mainRange, tiktokSnapshots);
-    const cur = pair.cur ?? r.tiktok_followers;
+    const pair = getSnapPairForRange(r.handle, mainRange, snapList);
+    const cur = pair.cur ?? r[fFollowers];
     const diff = (cur != null && pair.prev != null) ? cur - pair.prev : null;
     const p = (cur != null && pair.prev != null) ? pct(cur, pair.prev) : null;
     return { ...r, _cur: cur, _diff: diff, _pct: p };
@@ -846,6 +854,7 @@ function getSortedTiktokRoster(filterStarred=false){
     return 0;
   });
 }
+
 function getSortedAnrRoster(filterStarred=false){
   let list=[...anrRoster].map((r,i)=>{
     const pair=getSnapPairForRange(r.handle, anrRange, anrSnapshots);
@@ -868,8 +877,8 @@ function getSortedAnrRoster(filterStarred=false){
 }
 
 function renderRoster(){
-  if (currentPlatform === 'tiktok') renderTiktokRoster();
-  else renderInstagramRoster();
+  if (currentPlatform === 'instagram') renderInstagramRoster();
+  else renderSocialRoster(currentPlatform);
 }
 
 function renderInstagramRoster(){
@@ -892,23 +901,30 @@ function renderInstagramRoster(){
   }).join('');
 }
 
-function renderTiktokRoster(){
+// Generic renderer for tiktok/youtube/twitter/facebook
+function renderSocialRoster(platform){
+  const cfg = PLATFORMS[platform];
+  const fHandle = `${platform}_handle`;
+  const fFollowers = `${platform}_followers`;
+  const fNickname = `${platform}_nickname`;
+  const fProfilePic = `${platform}_profilePic`;
+  const fStatus = `${platform}_status`;
+  const snapList = platformData[platform]?.snapshots || [];
+
   const tbody = document.getElementById('roster-body');
   const isMyRoster = currentRosterTab === 'my';
   const cols = isAdmin ? 7 : 6;
-  let allArtists = roster.map((igArtist, i) => {
-    const ttData = tiktokRoster.find(t => t.handle === igArtist.handle) || {};
-    return { ...igArtist, ...ttData, _origIndex: i };
-  });
+  let allArtists = roster.map((r, i) => ({ ...r, _origIndex: i }));
   if (isMyRoster) allArtists = allArtists.filter(r => starred.has(r.handle));
   if (!allArtists.length) {
     tbody.innerHTML = `<tr><td colspan="${cols}" class="muted" style="padding:12px 0;font-size:13px;">${isMyRoster ? 'No starred artists yet — click ☆ next to any artist to add them here.' : 'No artists in roster'}</td></tr>`;
     return;
   }
   allArtists = allArtists.map(r => {
-    if (!r.tiktok_handle) return { ...r, _cur: null, _diff: null, _pct: null, _hasHandle: false };
-    const pair = getSnapPairForRange(r.handle, mainRange, tiktokSnapshots);
-    const cur = pair.cur ?? r.tiktok_followers;
+    const hasHandle = typeof r[fHandle] === 'string' && r[fHandle].length > 0;
+    if (!hasHandle) return { ...r, _cur: null, _diff: null, _pct: null, _hasHandle: false };
+    const pair = getSnapPairForRange(r.handle, mainRange, snapList);
+    const cur = pair.cur ?? r[fFollowers];
     const diff = (cur != null && pair.prev != null) ? cur - pair.prev : null;
     const p = (cur != null && pair.prev != null) ? pct(cur, pair.prev) : null;
     return { ...r, _cur: cur, _diff: diff, _pct: p, _hasHandle: true };
@@ -930,63 +946,69 @@ function renderTiktokRoster(){
     const igUrl = `https://www.instagram.com/${r.handle}/`;
     if (!r._hasHandle) {
       const editBtn = isAdmin
-        ? `<button class="edit-tt-btn" onclick="setTiktokHandle('${r.handle}')">+ Add TikTok</button>`
-        : '<span class="no-tt-pill">No TikTok linked</span>';
+        ? `<button class="edit-tt-btn" onclick="setSocialHandle('${platform}', '${r.handle}')">+ Add ${cfg.label}</button>`
+        : `<span class="no-tt-pill">No ${cfg.label} linked</span>`;
       const avatarHtml = `<span class="avatar-placeholder"></span>`;
       const editCell = isAdmin ? '<td></td>' : '';
       return `<tr class="dimmed-row"><td><span class="rank">—</span></td><td><button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${r.handle}')">${isStarred ? '★' : '☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a>${renderFanBadge(r)}</div></td><td colspan="3" style="text-align:left;">${editBtn}</td>${editCell}</tr>`;
     }
     rank++;
-    const ttUrl = `https://www.tiktok.com/@${r.tiktok_handle}`;
-    const fc = (r.tiktok_status === 'ok' || r.tiktok_followers != null)
-      ? `<strong>${fmt(r._cur ?? r.tiktok_followers)}</strong>`
-      : (r.tiktok_status === 'pending' ? '<span class="muted">pending first cron</span>' : '<span class="pill-err">error</span>');
-    const picUrl = r.tiktok_profilePic ? proxyUrl(r.tiktok_profilePic) : '';
+    const socialUrl = cfg.profileUrl(r[fHandle]);
+    const fc = (r[fStatus] === 'ok' || r[fFollowers] != null)
+      ? `<strong>${fmt(r._cur ?? r[fFollowers])}</strong>`
+      : (r[fStatus] === 'pending' ? '<span class="muted">pending first cron</span>' : '<span class="pill-err">error</span>');
+    const picUrl = r[fProfilePic] ? proxyUrl(r[fProfilePic]) : '';
     const avatarHtml = picUrl ? `<img src="${picUrl}" class="avatar" alt="" onerror="this.outerHTML='<span class=\\'avatar-placeholder\\'></span>'" />` : `<span class="avatar-placeholder"></span>`;
-    const editBtn = isAdmin ? `<td style="text-align:right"><button class="edit-tt-btn" onclick="setTiktokHandle('${r.handle}')" title="Edit TikTok handle">✎</button></td>` : '';
-    const ttHandleDisplay = r.tiktok_handle !== r.handle ? ` <span class="tt-handle-text">(@${r.tiktok_handle})</span>` : '';
-    return `<tr><td><span class="rank">${rank}</span></td><td><button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${r.handle}')">${isStarred ? '★' : '☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${ttUrl}" target="_blank">@${r.handle}</a>${ttHandleDisplay}${renderFanBadge(r)}</div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${editBtn}</tr>`;
+    const editBtn = isAdmin ? `<td style="text-align:right"><button class="edit-tt-btn" onclick="setSocialHandle('${platform}', '${r.handle}')" title="Edit ${cfg.label} handle">✎</button></td>` : '';
+    const handleDisplay = r[fHandle] !== r.handle ? ` <span class="tt-handle-text">(@${r[fHandle]})</span>` : '';
+    return `<tr><td><span class="rank">${rank}</span></td><td><button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${r.handle}')">${isStarred ? '★' : '☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${socialUrl}" target="_blank">@${r.handle}</a>${handleDisplay}${renderFanBadge(r)}</div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${editBtn}</tr>`;
   });
   tbody.innerHTML = rows.join('');
 }
 
-function setTiktokHandle(igHandle) {
-  const ttArtist = tiktokRoster.find(a => a.handle === igHandle);
-  const current = ttArtist?.tiktok_handle || '';
+function setSocialHandle(platform, igHandle) {
+  const cfg = PLATFORMS[platform];
+  const fHandle = `${platform}_handle`;
+  const artist = roster.find(a => a.handle === igHandle);
+  const current = artist?.[fHandle] || '';
   const promptMsg = current
-    ? `TikTok handle for @${igHandle} (leave blank to clear):`
-    : `Enter TikTok handle for @${igHandle} (without @):`;
+    ? `${cfg.label} handle for @${igHandle} (leave blank to clear):`
+    : `Enter ${cfg.label} handle for @${igHandle} (without @):`;
   const val = prompt(promptMsg, current);
   if (val === null) return;
-  saveTiktokHandle(igHandle, val.trim());
+  saveSocialHandle(platform, igHandle, val.trim());
 }
 
-async function saveTiktokHandle(igHandle, tiktokHandle) {
+async function saveSocialHandle(platform, igHandle, socialHandle) {
   const adminPw = sessionStorage.getItem('ig_admin_pw');
-  if (!adminPw) {
-    showErr('Admin session expired. Please log out and log in again to add TikTok handles.');
-    return;
-  }
+  if (!adminPw) { showErr('Admin session expired. Please log out and log in again.'); return; }
   const ind = document.getElementById('saving-indicator');
   if (ind) ind.style.display = 'inline';
   try {
-    const res = await fetch('/api/update-tiktok-handle', {
+    const value = socialHandle === '' ? null : socialHandle;
+    let url, body;
+    if (platform === 'tiktok') {
+      url = '/api/update-tiktok-handle';
+      body = { password: adminPw, handle: igHandle, tiktok_handle: value };
+    } else {
+      url = '/api/update-social-handle';
+      body = { password: adminPw, platform, handle: igHandle, social_handle: value };
+    }
+    const res = await fetch(url, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        password: adminPw,
-        handle: igHandle,
-        tiktok_handle: tiktokHandle === '' ? null : tiktokHandle
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
     });
     const data = await res.json();
     if (!data.ok) {
       showErr('Failed to save: ' + (data.error || 'Unknown error'));
     } else {
-      await loadTiktokRoster();
+      // Update local roster with the returned artist data
+      const idx = roster.findIndex(r => r.handle === igHandle);
+      if (idx !== -1 && data.artist) roster[idx] = data.artist;
       renderRoster();
       if (data.fetch_error) {
-        showErr(`Saved handle, but TikTok lookup failed: ${data.fetch_error}. Will retry on next cron run.`);
+        showErr(`Saved handle, but ${PLATFORMS[platform].label} lookup failed: ${data.fetch_error}. Will retry on next cron run.`);
       }
     }
   } catch (e) {
@@ -1019,33 +1041,23 @@ function toggleFanPageFlag(igHandle) {
 
 async function saveFanPageFlag(igHandle, isFanPage) {
   const adminPw = sessionStorage.getItem('ig_admin_pw');
-  if (!adminPw) {
-    showErr('Admin session expired. Please log out and log in again to update fan-page flags.');
-    return;
-  }
+  if (!adminPw) { showErr('Admin session expired. Please log out and log in again.'); return; }
   const ind = document.getElementById('saving-indicator');
   if (ind) ind.style.display = 'inline';
   try {
     const res = await fetch('/api/update-fan-page-flag', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        password: adminPw,
-        handle: igHandle,
-        isFanPage: isFanPage
-      })
+      body: JSON.stringify({ password: adminPw, handle: igHandle, isFanPage })
     });
     const data = await res.json();
-    if (!data.ok) {
-      showErr('Failed to save: ' + (data.error || 'Unknown error'));
-    } else {
+    if (!data.ok) { showErr('Failed to save: ' + (data.error || 'Unknown error')); }
+    else {
       const idx = roster.findIndex(a => a.handle === igHandle);
       if (idx !== -1) roster[idx].is_fan_page = isFanPage;
       renderRoster();
     }
-  } catch (e) {
-    showErr('Save failed: ' + e.message);
-  }
+  } catch (e) { showErr('Save failed: ' + e.message); }
   if (ind) ind.style.display = 'none';
 }
 
@@ -1175,7 +1187,14 @@ async function retryHandle(i){
   renderRoster();updateLastUpdated();await persistRoster();
 }
 
+// Refresh All — platform-aware. Instagram uses /api/followers per artist (existing behavior).
+// Other platforms use /api/social-followers per artist (admin-protected, writes to Redis).
 async function refreshAll(){
+  if (currentPlatform === 'instagram') return refreshInstagram();
+  return refreshSocialPlatform(currentPlatform);
+}
+
+async function refreshInstagram(){
   const btn=document.getElementById('refresh-btn'),pb=document.getElementById('progress-bar'),pf=document.getElementById('progress-fill');
   btn.disabled=true;btn.textContent='Refreshing...';pb.style.display='block';pf.style.width='0%';
   const total=roster.length;
@@ -1186,9 +1205,47 @@ async function refreshAll(){
     renderRoster();pf.style.width=`${Math.round((idx+1)/total*100)}%`;
     if(idx<total-1)await sleep(1100);
   }
-  pb.style.display='none';btn.disabled=false;btn.textContent='↻ Refresh all';
+  pb.style.display='none';btn.disabled=false;btn.textContent=`↻ Refresh ${PLATFORMS.instagram.label}`;
   updateLastUpdated();await persistRoster();await saveSnapshot(true);
 }
+
+async function refreshSocialPlatform(platform){
+  const cfg = PLATFORMS[platform];
+  const fHandle = `${platform}_handle`;
+  const adminPw = sessionStorage.getItem('ig_admin_pw');
+  if (!adminPw) { showErr('Admin session expired. Please log out and log in again.'); return; }
+  const targets = roster.filter(r => typeof r[fHandle] === 'string' && r[fHandle].length > 0);
+  if (!targets.length) { showErr(`No artists have a ${cfg.label} handle set yet.`); return; }
+  const btn = document.getElementById('refresh-btn'), pb = document.getElementById('progress-bar'), pf = document.getElementById('progress-fill');
+  btn.disabled = true; btn.textContent = `Refreshing ${cfg.label}...`; pb.style.display = 'block'; pf.style.width = '0%';
+  let succeeded = 0, failed = 0;
+  for (let idx = 0; idx < targets.length; idx++) {
+    const t = targets[idx];
+    try {
+      const res = await fetch('/api/social-followers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPw, platform, handle: t.handle })
+      });
+      const data = await res.json();
+      if (data.ok && data.artist) {
+        const i = roster.findIndex(r => r.handle === t.handle);
+        if (i !== -1) roster[i] = data.artist;
+        succeeded++;
+      } else { failed++; }
+    } catch (e) { failed++; }
+    renderRoster();
+    pf.style.width = `${Math.round((idx + 1) / targets.length * 100)}%`;
+    if (idx < targets.length - 1) await sleep(1100);
+  }
+  pb.style.display = 'none';
+  btn.disabled = false; btn.textContent = `↻ Refresh ${cfg.label}`;
+  await loadPlatformStatus(platform);
+  await loadPlatformSnapshots(platform);
+  updateLastUpdated();
+  if (failed) showErr(`${cfg.label} refresh complete — ${succeeded} updated, ${failed} failed.`);
+}
+
 async function anrRefreshAll(){
   const btn=document.getElementById('anr-refresh-btn'),pb=document.getElementById('anr-progress-bar'),pf=document.getElementById('anr-progress-fill');
   btn.disabled=true;btn.textContent='Refreshing...';pb.style.display='block';pf.style.width='0%';
@@ -1274,7 +1331,10 @@ function exportReport(){
 function getFileDateStr(){const d=new Date();return`${d.toLocaleString('en-US',{month:'short'})}-${d.getDate()}-${d.getFullYear()}`;}
 
 function downloadCSV(){
-  if (currentPlatform === 'tiktok') return downloadTiktokCSV();
+  if (currentPlatform === 'instagram') return downloadInstagramCSV();
+  return downloadSocialCSV(currentPlatform);
+}
+function downloadInstagramCSV(){
   const sorted=getSortedRoster(currentRosterTab==='my');
   let csv='Rank,Handle,Followers,Follower Growth,Follower Growth %\n';
   sorted.forEach((r,idx)=>{
@@ -1284,15 +1344,19 @@ function downloadCSV(){
   });
   const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
 }
-function downloadTiktokCSV(){
-  const sorted=getSortedTiktokRoster(currentRosterTab==='my');
-  let csv='Rank,Artist,TikTok Handle,Followers,Follower Growth,Follower Growth %\n';
-  sorted.forEach((r,idx)=>{
-    const growth=r._diff!==null?(r._diff>=0?'+':'')+r._diff:'';
-    const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'';
-    csv+=`${idx+1},@${r.handle},@${r.tiktok_handle},${r._cur??r.tiktok_followers??''},${growth},${growthPct}\n`;
+function downloadSocialCSV(platform){
+  const cfg = PLATFORMS[platform];
+  const fHandle = `${platform}_handle`;
+  const fFollowers = `${platform}_followers`;
+  const sorted = getSortedSocialRoster(platform, currentRosterTab === 'my');
+  let csv = `Rank,Artist,${cfg.label} Handle,Followers,Follower Growth,Follower Growth %\n`;
+  sorted.forEach((r, idx) => {
+    const growth = r._diff !== null ? (r._diff >= 0 ? '+' : '') + r._diff : '';
+    const growthPct = r._pct !== null ? (r._pct >= 0 ? '+' : '') + r._pct.toFixed(2) + '%' : '';
+    csv += `${idx + 1},@${r.handle},@${r[fHandle]},${r._cur ?? r[fFollowers] ?? ''},${growth},${growthPct}\n`;
   });
-  const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Alamo-Santa-Anna-TikTok-Report-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
+  const blob = new Blob([csv], {type: 'text/csv'}), url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = `Alamo-Santa-Anna-${cfg.label}-Report-${getFileDateStr()}.csv`; a.click(); URL.revokeObjectURL(url);
 }
 function anrDownloadCSV(){
   const sorted=getSortedAnrRoster(currentAnrRosterTab==='my');
@@ -1305,7 +1369,10 @@ function anrDownloadCSV(){
   const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Alamo-ANR-Report-${getFileDateStr()}.csv`;a.click();URL.revokeObjectURL(url);
 }
 function downloadPDF(){
-  if (currentPlatform === 'tiktok') return downloadTiktokPDF();
+  if (currentPlatform === 'instagram') return downloadInstagramPDF();
+  return downloadSocialPDF(currentPlatform);
+}
+function downloadInstagramPDF(){
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
   const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
   const sorted=getSortedRoster(currentRosterTab==='my');
@@ -1320,20 +1387,23 @@ function downloadPDF(){
   doc.autoTable({startY:34,head:[['#','Handle','Followers','Follower Growth','Follower Growth %']],body:tableData,styles:{fontSize:10,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:12},1:{cellWidth:60},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:40}}});
   doc.save(`Alamo-Santa-Anna-Instagram-Report-${getFileDateStr()}.pdf`);
 }
-function downloadTiktokPDF(){
-  const{jsPDF}=window.jspdf;const doc=new jsPDF();
-  const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  const sorted=getSortedTiktokRoster(currentRosterTab==='my');
-  doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('TikTok Follower Report',14,20);
-  doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(120);
-  doc.text(`Alamo Records / Santa Anna Roster — ${today}`,14,28);doc.setTextColor(0);
-  const tableData=sorted.map((r,idx)=>{
-    const growth=r._diff!==null?(r._diff>=0?'+':'')+Number(r._diff).toLocaleString():'—';
-    const growthPct=r._pct!==null?(r._pct>=0?'+':'')+r._pct.toFixed(2)+'%':'—';
-    return[idx+1,`@${r.handle}`,`@${r.tiktok_handle}`,fmt(r._cur??r.tiktok_followers),growth,growthPct];
+function downloadSocialPDF(platform){
+  const cfg = PLATFORMS[platform];
+  const fHandle = `${platform}_handle`;
+  const fFollowers = `${platform}_followers`;
+  const { jsPDF } = window.jspdf; const doc = new jsPDF();
+  const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const sorted = getSortedSocialRoster(platform, currentRosterTab === 'my');
+  doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.text(`${cfg.label} Follower Report`, 14, 20);
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(120);
+  doc.text(`Alamo Records / Santa Anna Roster — ${today}`, 14, 28); doc.setTextColor(0);
+  const tableData = sorted.map((r, idx) => {
+    const growth = r._diff !== null ? (r._diff >= 0 ? '+' : '') + Number(r._diff).toLocaleString() : '—';
+    const growthPct = r._pct !== null ? (r._pct >= 0 ? '+' : '') + r._pct.toFixed(2) + '%' : '—';
+    return [idx + 1, `@${r.handle}`, `@${r[fHandle]}`, fmt(r._cur ?? r[fFollowers]), growth, growthPct];
   });
-  doc.autoTable({startY:34,head:[['#','Artist','TikTok','Followers','Growth','Growth %']],body:tableData,styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:10},1:{cellWidth:45},2:{cellWidth:45},3:{cellWidth:30},4:{cellWidth:32},5:{cellWidth:32}}});
-  doc.save(`Alamo-Santa-Anna-TikTok-Report-${getFileDateStr()}.pdf`);
+  doc.autoTable({startY:34,head:[['#','Artist',cfg.label,'Followers','Growth','Growth %']],body:tableData,styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:10},1:{cellWidth:45},2:{cellWidth:45},3:{cellWidth:30},4:{cellWidth:32},5:{cellWidth:32}}});
+  doc.save(`Alamo-Santa-Anna-${cfg.label}-Report-${getFileDateStr()}.pdf`);
 }
 function anrDownloadPDF(){
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
