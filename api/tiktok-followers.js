@@ -5,28 +5,28 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const apiKey = process.env.TIKTOK_RAPIDAPI_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'TIKTOK_RAPIDAPI_KEY not configured' });
+  const smmKey = process.env.SMM_RAPIDAPI_KEY;
+  if (!smmKey) return res.status(500).json({ error: 'SMM_RAPIDAPI_KEY not configured' });
 
   const handle = req.query.handle;
   if (!handle || typeof handle !== 'string') {
     return res.status(400).json({ error: 'Missing handle parameter' });
   }
-
   // Strip @ if present, trim whitespace, lowercase (TikTok handles are case-insensitive)
   const cleanHandle = handle.trim().replace(/^@/, '').toLowerCase();
   if (!cleanHandle) return res.status(400).json({ error: 'Invalid handle' });
 
+  const tiktokUrl = `https://www.tiktok.com/@${cleanHandle}`;
+  const apiUrl = `https://social-media-master.p.rapidapi.com/tiktok-user-account?url=${encodeURIComponent(tiktokUrl)}`;
+
   try {
-    const r = await fetch(
-      `https://tiktok-best-experience.p.rapidapi.com/user/${encodeURIComponent(cleanHandle)}`,
-      {
-        headers: {
-          'x-rapidapi-host': 'tiktok-best-experience.p.rapidapi.com',
-          'x-rapidapi-key': apiKey
-        }
+    const r = await fetch(apiUrl, {
+      headers: {
+        'x-rapidapi-host': 'social-media-master.p.rapidapi.com',
+        'x-rapidapi-key': smmKey,
+        'Content-Type': 'application/json'
       }
-    );
+    });
 
     if (!r.ok) {
       return res.status(r.status).json({
@@ -36,44 +36,34 @@ export default async function handler(req, res) {
     }
 
     const json = await r.json();
+    const profile = json?.profile;
+    const stats = json?.stats;
 
-    // Verify success: status must be "ok", data.status_code must be 0, and user object must exist
-    if (json.status !== 'ok' || !json.data || json.data.status_code !== 0 || !json.data.user) {
+    if (!profile || !stats) {
       return res.status(404).json({
         error: 'Artist not found or invalid response',
         handle: cleanHandle,
-        api_status: json.status,
-        api_status_code: json.data?.status_code
+        api_status: json?.status?.code
       });
-    }
-
-    const u = json.data.user;
-
-    // Extract avatar URL — prefer 300x300, fall back through chain
-    let avatarUrl = null;
-    if (u.avatar_300x300?.url_list?.length > 0) {
-      avatarUrl = u.avatar_300x300.url_list[0];
-    } else if (u.avatar_medium?.url_list?.length > 0) {
-      avatarUrl = u.avatar_medium.url_list[0];
-    } else if (u.avatar_thumb?.url_list?.length > 0) {
-      avatarUrl = u.avatar_thumb.url_list[0];
     }
 
     return res.status(200).json({
       ok: true,
       handle: cleanHandle,
       data: {
-        follower_count: u.follower_count ?? 0,
-        nickname: u.nickname ?? cleanHandle,
-        unique_id: u.unique_id ?? cleanHandle,
-        uid: u.uid ?? null,
-        avatar_url: avatarUrl,
-        following_count: u.following_count ?? 0,
-        total_favorited: u.total_favorited ?? 0,
-        aweme_count: u.aweme_count ?? 0,
-        signature: u.signature ?? '',
-        verified: !!(u.enterprise_verify_reason && u.enterprise_verify_reason.length > 0),
-        region: u.region ?? ''
+        follower_count: stats.followersCount ?? 0,
+        nickname: profile.name ?? cleanHandle,
+        unique_id: profile.username ?? cleanHandle,
+        uid: profile.userID ?? null,
+        avatar_url: profile.image ?? null,
+        // The fields below are not provided by SMM (only by the old API):
+        following_count: null,
+        total_favorited: null,
+        aweme_count: null,
+        signature: profile.description ?? '',
+        verified: !!profile.verified,
+        region: profile.countryCode ?? '',
+        masterID: profile.masterID ?? null  // new: SMM masterID for downstream use
       }
     });
   } catch (err) {
