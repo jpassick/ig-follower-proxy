@@ -1,4 +1,9 @@
 const PLATFORMS = {
+  tiktok: {
+    handleEndpoint: '/tiktok-user-account',
+    profileUrl: handle => `https://www.tiktok.com/@${handle}`,
+    wrapperKey: 'profile'
+  },
   youtube: {
     handleEndpoint: '/youtube-channel-details',
     profileUrl: handle => `https://www.youtube.com/@${handle}`,
@@ -82,7 +87,7 @@ export default async function handler(req, res) {
 
   if (!socialHandle) {
     return res.status(400).json({
-      error: `Artist ${igHandle} has no ${fHandle} set. Use update-social-handle to add one first.`
+      error: `Artist ${igHandle} has no ${fHandle} set. Use update-social-handle (or update-tiktok-handle for TikTok) to add one first.`
     });
   }
 
