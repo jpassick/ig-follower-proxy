@@ -45,9 +45,7 @@
     { "path": "/api/cron-anr-batch", "schedule": "30 14 * * *" },
     { "path": "/api/cron-anr-batch", "schedule": "35 14 * * *" },
     { "path": "/api/cron-tiktok-snapshot-daily", "schedule": "40 14 * * *" },
-    { "path": "/api/cron-social-snapshot-daily?platform=youtube", "schedule": "45 14 * * *" },
-    { "path": "/api/cron-social-snapshot-daily?platform=twitter", "schedule": "50 14 * * *" },
-    { "path": "/api/cron-social-snapshot-daily?platform=facebook", "schedule": "55 14 * * *" },
+    { "path": "/api/cron-social-snapshot-daily", "schedule": "45 14 * * *" },
     { "path": "/api/cron-snapshot-daily", "schedule": "0 15 * * *" },
     { "path": "/api/cron-backup-snapshots", "schedule": "0 4 * * *" }
   ],
