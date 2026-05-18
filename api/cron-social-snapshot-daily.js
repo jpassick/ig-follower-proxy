@@ -4,7 +4,8 @@ const PLATFORMS = {
   youtube: {
     dailyEndpoint: '/youtube-channel-daily-stats',
     daysParam: 'dayRange',
-    daysValue: '14',
+    daysValue: '7',
+    extraParams: '&sortDesc=false&includeProfile=false',
     detailsEndpoint: '/youtube-channel-details',
     detailsProfileUrl: handle => `https://www.youtube.com/@${handle}`,
     detailsWrapper: 'channel',
@@ -16,6 +17,7 @@ const PLATFORMS = {
     dailyEndpoint: '/twitter-account-stats',
     daysParam: 'days',
     daysValue: '7',
+    extraParams: '',
     detailsEndpoint: '/twitter-user-account',
     detailsProfileUrl: handle => `https://x.com/${handle}`,
     detailsWrapper: 'profile',
@@ -27,6 +29,7 @@ const PLATFORMS = {
     dailyEndpoint: '/facebook-account-stats',
     daysParam: 'days',
     daysValue: '7',
+    extraParams: '',
     detailsEndpoint: '/facebook-user-account',
     detailsProfileUrl: handle => `https://www.facebook.com/${handle}`,
     detailsWrapper: 'profile',
@@ -82,15 +85,16 @@ export default async function handler(req, res) {
     }
   }
 
+  // Returns { followers, source } only if followers is a POSITIVE number.
+  // SMM returns 0/null for accounts it has no Daily Stats data for —
+  // we must reject those and force a fallback to the Details endpoint.
   function parseDailyStats(data, config) {
-    // Twitter/FB: prefer summaryStats.followers (the "current" snapshot)
     if (config.hasSummaryStats) {
       const f = data?.summaryStats?.followers;
-      if (typeof f === 'number') {
+      if (typeof f === 'number' && f > 0) {
         return { followers: f, source: 'summaryStats' };
       }
     }
-    // YouTube: find the most recent entry in stats[] by dateISO
     const arr = data?.[config.statsArrayKey];
     if (!Array.isArray(arr) || arr.length === 0) return null;
     const sorted = arr.slice().sort((a, b) => {
@@ -100,7 +104,7 @@ export default async function handler(req, res) {
     });
     const latest = sorted[0];
     const f = latest?.[config.followersField];
-    if (typeof f !== 'number') return null;
+    if (typeof f !== 'number' || f <= 0) return null;
     return { followers: f, source: 'dailyStatsArray', latestDate: latest.dateISO || latest.date };
   }
 
@@ -111,7 +115,7 @@ export default async function handler(req, res) {
     const followers = (typeof stats.followersCount === 'number') ? stats.followersCount
                     : (typeof stats.followers === 'number') ? stats.followers
                     : null;
-    if (followers === null) return null;
+    if (followers === null || followers <= 0) return null;
     return {
       followers,
       masterID: wrapper?.masterID || null,
@@ -188,9 +192,8 @@ export default async function handler(req, res) {
       let avatar = null;
       let resultStatus = null;
 
-      // Step 1: if we have a masterID, try the daily-stats endpoint
       if (masterID) {
-        const dailyUrl = `${SMM_BASE}${config.dailyEndpoint}?id=${encodeURIComponent(masterID)}&${config.daysParam}=${config.daysValue}`;
+        const dailyUrl = `${SMM_BASE}${config.dailyEndpoint}?id=${encodeURIComponent(masterID)}&${config.daysParam}=${config.daysValue}${config.extraParams || ''}`;
         const dailyR = await smmFetch(dailyUrl);
         if (dailyR.ok) {
           const parsed = parseDailyStats(dailyR.data, config);
@@ -203,7 +206,6 @@ export default async function handler(req, res) {
         }
       }
 
-      // Step 2: fall back to details endpoint if daily-stats had no usable value
       if (followers === null) {
         const detailsUrl = `${SMM_BASE}${config.detailsEndpoint}?url=${encodeURIComponent(config.detailsProfileUrl(socialHandle))}`;
         const detailsR = await smmFetch(detailsUrl);
@@ -244,6 +246,8 @@ export default async function handler(req, res) {
         };
         successCount++;
       } else {
+        // No fresh value available — keep prior value in snapshot rather than writing 0/null
+        const priorFollowers = roster[idx][fFollowers] ?? null;
         roster[idx] = {
           ...roster[idx],
           [fStatus]: resultStatus || 'error',
@@ -251,20 +255,18 @@ export default async function handler(req, res) {
         };
         snapshotEntry.artists[artist.handle] = {
           [fHandle]: socialHandle,
-          followers: roster[idx][fFollowers] ?? null,
+          followers: priorFollowers,
           status: resultStatus || 'error'
         };
         failCount++;
         console.log(`[${platform}] @${artist.handle} (${socialHandle}) failed: ${resultStatus || 'unknown'}`);
       }
 
-      // 1.1s sleep between artists (skip on last iteration of this platform)
       if (i < targets.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 1100));
       }
     }
 
-    // Read snapshots, dedup today, append, cap at 1095
     const snapshotsKey = `${platform}-snapshots`;
     const snapR = await fetch(`${url}/get/${snapshotsKey}`, {
       headers: { Authorization: `Bearer ${token}` }
@@ -309,7 +311,6 @@ export default async function handler(req, res) {
     });
   }
 
-  // Write updated roster back
   const cleanRoster = roster.filter(a => a && typeof a.handle === 'string' && a.handle.length > 0);
   await fetch(`${url}/set/roster`, {
     method: 'POST',
