@@ -540,20 +540,38 @@ function getSnapPairForRange(handle, range, snapList) {
   const { startTs, endTs } = range;
   const endDay   = toStartOfDay(endTs);
   const startDay = toStartOfDay(startTs);
-  let endSnap = null, startSnap = null;
-  for (const snap of snapList) {
+  let endSnap = null, startSnap = null, startSnapIdx = -1, endSnapIdx = -1;
+  for (let i = 0; i < snapList.length; i++) {
+    const snap = snapList[i];
     const snapDay = toStartOfDay(snapTs(snap));
-    if (snapDay <= endDay)   endSnap   = snap;
-    if (snapDay <= startDay) startSnap = snap;
+    if (snapDay <= endDay)   { endSnap   = snap; endSnapIdx   = i; }
+    if (snapDay <= startDay) { startSnap = snap; startSnapIdx = i; }
   }
-  const curEntry  = endSnap   ? endSnap.data.find(d => d.handle === handle)   : null;
-  const prevEntry = startSnap ? startSnap.data.find(d => d.handle === handle) : null;
+  const curEntry = endSnap ? endSnap.data.find(d => d.handle === handle) : null;
+  let prevEntry  = startSnap ? startSnap.data.find(d => d.handle === handle) : null;
+
+  // When start and end resolve to the same snapshot (e.g. "Today" with one snap so far),
+  // walk backwards through earlier snaps until we find one that contains this handle.
   if (endSnap && startSnap && endSnap === startSnap) {
-    const idx = snapList.indexOf(endSnap);
-    const altSnap  = idx > 0 ? snapList[idx - 1] : null;
-    const altEntry = altSnap ? altSnap.data.find(d => d.handle === handle) : null;
+    let altEntry = null;
+    for (let i = endSnapIdx - 1; i >= 0; i--) {
+      const e = snapList[i].data.find(d => d.handle === handle);
+      if (e) { altEntry = e; break; }
+    }
     return { cur: curEntry ? curEntry.followers : null, prev: altEntry ? altEntry.followers : null };
   }
+
+  // If startSnap exists but has no entry for this handle (tracking started mid-window
+  // for this platform — common on FB/X/YT where coverage built up over time), walk forward
+  // to the first snap that does have it, but never past endSnap so prev stays in window.
+  if (startSnap && !prevEntry) {
+    for (let i = startSnapIdx + 1; i < snapList.length; i++) {
+      if (snapList[i] === endSnap) break;
+      const e = snapList[i].data.find(d => d.handle === handle);
+      if (e) { prevEntry = e; break; }
+    }
+  }
+
   return { cur: curEntry ? curEntry.followers : null, prev: prevEntry ? prevEntry.followers : null };
 }
 
