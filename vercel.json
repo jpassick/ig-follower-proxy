@@ -56,6 +56,7 @@
     "api/cron-anr-batch.js":                { "maxDuration": 300 },
     "api/cron-backup-snapshots.js":         { "maxDuration": 30 },
     "api/followers.js":                     { "maxDuration": 30 },
-    "api/social-followers.js":              { "maxDuration": 30 }
+    "api/social-followers.js":              { "maxDuration": 30 },
+    "api/test-smm-resolution.js":           { "maxDuration": 30 }
   }
 }
