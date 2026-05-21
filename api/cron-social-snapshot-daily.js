@@ -1,19 +1,12 @@
 const SMM_BASE = 'https://social-media-master.p.rapidapi.com';
+const YT_BASE = 'https://www.googleapis.com/youtube/v3';
 
 const PLATFORMS = {
   youtube: {
-    dailyEndpoint: '/youtube-channel-daily-stats',
-    daysParam: 'dayRange',
-    daysValue: '7',
-    extraParams: '&sortDesc=false&includeProfile=false',
-    detailsEndpoint: '/youtube-channel-details',
-    detailsProfileUrl: handle => `https://www.youtube.com/@${handle}`,
-    detailsWrapper: 'channel',
-    statsArrayKey: 'stats',
-    followersField: 'subscriberCount',
-    hasSummaryStats: false
+    provider: 'youtube_data_api'
   },
   twitter: {
+    provider: 'smm',
     dailyEndpoint: '/twitter-account-stats',
     daysParam: 'days',
     daysValue: '7',
@@ -26,6 +19,7 @@ const PLATFORMS = {
     hasSummaryStats: true
   },
   facebook: {
+    provider: 'smm',
     dailyEndpoint: '/facebook-account-stats',
     daysParam: 'days',
     daysValue: '7',
@@ -51,8 +45,10 @@ export default async function handler(req, res) {
   const url = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
   const smmKey = process.env.SMM_RAPIDAPI_KEY;
+  const ytApiKey = process.env.YOUTUBE_API_KEY;
   if (!url || !token) return res.status(500).json({ error: 'Redis not configured' });
   if (!smmKey) return res.status(500).json({ error: 'SMM_RAPIDAPI_KEY not configured' });
+  // YOUTUBE_API_KEY is checked per-platform below — missing key skips YT, twitter/fb still run
 
   const startTime = Date.now();
   const TIME_BUDGET_MS = 270 * 1000;
@@ -71,6 +67,60 @@ export default async function handler(req, res) {
           return { ok: true, data: json };
         }
         if (attempt === 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
+        }
+        return { ok: false, status: `error_${r.status}` };
+      } catch (err) {
+        if (attempt === 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
+        }
+        return { ok: false, status: 'fetch_error' };
+      }
+    }
+  }
+
+  // YouTube Data API v3 fetcher. One call returns subscriber count + channel name + avatar.
+  // Handle can be passed with or without leading "@" — strip it just in case.
+  async function fetchYouTubeData(handle) {
+    const cleanHandle = handle.replace(/^@+/, '');
+    const apiUrl = `${YT_BASE}/channels?part=statistics,snippet&forHandle=${encodeURIComponent(cleanHandle)}&key=${ytApiKey}`;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const r = await fetch(apiUrl);
+        if (r.ok) {
+          const json = await r.json();
+          const items = json?.items;
+          if (!Array.isArray(items) || items.length === 0) {
+            return { ok: false, status: 'not_found' };
+          }
+          const channel = items[0];
+          const stats = channel?.statistics || {};
+          const snippet = channel?.snippet || {};
+          const hidden = stats.hiddenSubscriberCount === true;
+          const nickname = snippet.title || null;
+          const avatar = snippet?.thumbnails?.default?.url
+                      || snippet?.thumbnails?.medium?.url
+                      || snippet?.thumbnails?.high?.url
+                      || null;
+          if (hidden) {
+            // Subscriber count is hidden by the channel owner. Preserve prior follower
+            // value and still update nickname/avatar — those are unaffected by the hide setting.
+            return { ok: false, status: 'hidden_count', nickname, avatar };
+          }
+          const subStr = stats.subscriberCount;
+          const followers = typeof subStr === 'string' ? parseInt(subStr, 10)
+                          : typeof subStr === 'number' ? subStr
+                          : null;
+          if (followers === null || Number.isNaN(followers) || followers < 0) {
+            return { ok: false, status: 'invalid_count', nickname, avatar };
+          }
+          return { ok: true, followers, nickname, avatar };
+        }
+        // Non-OK: 403 (quota exceeded / bad key), 400 (bad request), 5xx (transient)
+        // Retry once on transient errors
+        if (attempt === 1 && r.status >= 500) {
           await new Promise(resolve => setTimeout(resolve, 2000));
           continue;
         }
@@ -153,6 +203,12 @@ export default async function handler(req, res) {
       continue;
     }
 
+    // YouTube requires its own API key. If missing, skip platform entirely.
+    if (config.provider === 'youtube_data_api' && !ytApiKey) {
+      results.push({ platform, skipped: 'no_youtube_api_key' });
+      continue;
+    }
+
     const fHandle      = `${platform}_handle`;
     const fMasterID    = `${platform}_masterID`;
     const fNickname    = `${platform}_nickname`;
@@ -172,9 +228,11 @@ export default async function handler(req, res) {
 
     let successCount = 0;
     let failCount = 0;
-    let dailyStatsHits = 0;
-    let detailsFallbacks = 0;
-    let masterIDFetches = 0;
+    let dailyStatsHits = 0;       // SMM-only
+    let detailsFallbacks = 0;     // SMM-only
+    let masterIDFetches = 0;      // SMM-only
+    let hiddenCounts = 0;          // YT-only
+    let notFound = 0;              // YT mostly
     const snapshotEntry = { ts: Date.now(), date: today, artists: {} };
 
     for (let i = 0; i < targets.length; i++) {
@@ -192,42 +250,64 @@ export default async function handler(req, res) {
       let avatar = null;
       let resultStatus = null;
 
-      if (masterID) {
-        const dailyUrl = `${SMM_BASE}${config.dailyEndpoint}?id=${encodeURIComponent(masterID)}&${config.daysParam}=${config.daysValue}${config.extraParams || ''}`;
-        const dailyR = await smmFetch(dailyUrl);
-        if (dailyR.ok) {
-          const parsed = parseDailyStats(dailyR.data, config);
-          if (parsed) {
-            followers = parsed.followers;
-            dailyStatsHits++;
-          }
+      if (config.provider === 'youtube_data_api') {
+        // -------- YouTube Data API v3 path --------
+        const ytData = await fetchYouTubeData(socialHandle);
+        if (ytData.ok) {
+          followers = ytData.followers;
+          nickname = ytData.nickname;
+          avatar = ytData.avatar;
         } else {
-          resultStatus = dailyR.status;
+          resultStatus = ytData.status;
+          if (ytData.status === 'hidden_count') {
+            hiddenCounts++;
+            // Preserve nickname/avatar even when count is hidden
+            if (ytData.nickname) nickname = ytData.nickname;
+            if (ytData.avatar) avatar = ytData.avatar;
+          } else if (ytData.status === 'not_found') {
+            notFound++;
+          }
         }
-      }
-
-      if (followers === null) {
-        const detailsUrl = `${SMM_BASE}${config.detailsEndpoint}?url=${encodeURIComponent(config.detailsProfileUrl(socialHandle))}`;
-        const detailsR = await smmFetch(detailsUrl);
-        if (detailsR.ok) {
-          const parsed = parseDetails(detailsR.data, config);
-          if (parsed) {
-            followers = parsed.followers;
-            nickname = parsed.nickname;
-            avatar = parsed.avatar;
-            if (!masterID && parsed.masterID) {
-              masterID = parsed.masterID;
-              masterIDFetches++;
+      } else {
+        // -------- SMM path (twitter / facebook) --------
+        if (masterID) {
+          const dailyUrl = `${SMM_BASE}${config.dailyEndpoint}?id=${encodeURIComponent(masterID)}&${config.daysParam}=${config.daysValue}${config.extraParams || ''}`;
+          const dailyR = await smmFetch(dailyUrl);
+          if (dailyR.ok) {
+            const parsed = parseDailyStats(dailyR.data, config);
+            if (parsed) {
+              followers = parsed.followers;
+              dailyStatsHits++;
             }
-            detailsFallbacks++;
           } else {
-            resultStatus = resultStatus || 'not_found';
+            resultStatus = dailyR.status;
           }
-        } else {
-          resultStatus = resultStatus || detailsR.status;
+        }
+
+        if (followers === null) {
+          const detailsUrl = `${SMM_BASE}${config.detailsEndpoint}?url=${encodeURIComponent(config.detailsProfileUrl(socialHandle))}`;
+          const detailsR = await smmFetch(detailsUrl);
+          if (detailsR.ok) {
+            const parsed = parseDetails(detailsR.data, config);
+            if (parsed) {
+              followers = parsed.followers;
+              nickname = parsed.nickname;
+              avatar = parsed.avatar;
+              if (!masterID && parsed.masterID) {
+                masterID = parsed.masterID;
+                masterIDFetches++;
+              }
+              detailsFallbacks++;
+            } else {
+              resultStatus = resultStatus || 'not_found';
+            }
+          } else {
+            resultStatus = resultStatus || detailsR.status;
+          }
         }
       }
 
+      // Common update logic for all providers
       if (followers !== null) {
         const updates = {
           [fFollowers]: followers,
@@ -246,13 +326,17 @@ export default async function handler(req, res) {
         };
         successCount++;
       } else {
-        // No fresh value available — keep prior value in snapshot rather than writing 0/null
+        // No fresh follower value — keep prior value in snapshot rather than zero/null.
+        // For YouTube hidden_count: still update nickname/avatar if we got them.
         const priorFollowers = roster[idx][fFollowers] ?? null;
-        roster[idx] = {
-          ...roster[idx],
+        const updates = {
           [fStatus]: resultStatus || 'error',
           [fLastUpdated]: now
         };
+        if (nickname) updates[fNickname] = nickname;
+        if (avatar) updates[fProfilePic] = avatar;
+        roster[idx] = { ...roster[idx], ...updates };
+
         snapshotEntry.artists[artist.handle] = {
           [fHandle]: socialHandle,
           followers: priorFollowers,
@@ -262,8 +346,12 @@ export default async function handler(req, res) {
         console.log(`[${platform}] @${artist.handle} (${socialHandle}) failed: ${resultStatus || 'unknown'}`);
       }
 
+      // Inter-artist sleep — needed for SMM rate-limit safety, not needed for YT Data API
       if (i < targets.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1100));
+        if (config.provider === 'smm') {
+          await new Promise(resolve => setTimeout(resolve, 1100));
+        }
+        // YouTube: no sleep (Google's quota is unit-based, not rate-limited)
       }
     }
 
@@ -300,15 +388,22 @@ export default async function handler(req, res) {
       body: JSON.stringify(Date.now())
     });
 
-    results.push({
+    const result = {
       platform,
+      provider: config.provider,
       total: targets.length,
       success: successCount,
-      fail: failCount,
-      dailyStatsHits,
-      detailsFallbacks,
-      masterIDFetches
-    });
+      fail: failCount
+    };
+    if (config.provider === 'smm') {
+      result.dailyStatsHits = dailyStatsHits;
+      result.detailsFallbacks = detailsFallbacks;
+      result.masterIDFetches = masterIDFetches;
+    } else if (config.provider === 'youtube_data_api') {
+      result.hiddenCounts = hiddenCounts;
+      result.notFound = notFound;
+    }
+    results.push(result);
   }
 
   const cleanRoster = roster.filter(a => a && typeof a.handle === 'string' && a.handle.length > 0);
