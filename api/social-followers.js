@@ -91,42 +91,93 @@ export default async function handler(req, res) {
     });
   }
 
+  const smmHeaders = {
+    'x-rapidapi-host': 'social-media-master.p.rapidapi.com',
+    'x-rapidapi-key': smmKey,
+    'Content-Type': 'application/json'
+  };
+
+  async function smmGet(apiUrl) {
+    try {
+      const r = await fetch(apiUrl, { headers: smmHeaders });
+      if (r.ok) {
+        const json = await r.json();
+        return { ok: true, data: json };
+      }
+      return { ok: false, status: `error_${r.status}` };
+    } catch (err) {
+      return { ok: false, status: `fetch_error: ${err.message}` };
+    }
+  }
+
   const useFastPath = !!masterID;
-  const apiUrl = useFastPath
+  const profileApiUrl = useFastPath
     ? `https://social-media-master.p.rapidapi.com/universal-profile-id?id=${encodeURIComponent(masterID)}`
     : `https://social-media-master.p.rapidapi.com${config.handleEndpoint}?url=${encodeURIComponent(config.profileUrl(socialHandle))}`;
+
+  // For TikTok specifically: also pull from /tiktok-account-stats for the more accurate primary
+  // follower count, mirroring what cron-tiktok-snapshot-daily.js does. When masterID is already
+  // known, run both calls in parallel. Other platforms keep their existing single-call behavior
+  // until those endpoints are verified.
+  let profileResp;
+  let tiktokStatsResp = null;
+
+  if (platform === 'tiktok' && useFastPath) {
+    // Parallel: profile fast-path + account-stats
+    const statsApiUrl = `https://social-media-master.p.rapidapi.com/tiktok-account-stats?id=${encodeURIComponent(masterID)}&days=1`;
+    [profileResp, tiktokStatsResp] = await Promise.all([
+      smmGet(profileApiUrl),
+      smmGet(statsApiUrl)
+    ]);
+  } else {
+    profileResp = await smmGet(profileApiUrl);
+    // First-time TikTok refresh (no stored masterID): discover masterID from the profile call,
+    // then fetch account-stats sequentially.
+    if (platform === 'tiktok' && profileResp.ok) {
+      const discoveredMasterID = profileResp.data?.profile?.masterID;
+      if (discoveredMasterID) {
+        const statsApiUrl = `https://social-media-master.p.rapidapi.com/tiktok-account-stats?id=${encodeURIComponent(discoveredMasterID)}&days=1`;
+        tiktokStatsResp = await smmGet(statsApiUrl);
+      }
+    }
+  }
 
   let fetchedData = null;
   let fetchError = null;
 
-  try {
-    const smmR = await fetch(apiUrl, {
-      headers: {
-        'x-rapidapi-host': 'social-media-master.p.rapidapi.com',
-        'x-rapidapi-key': smmKey,
-        'Content-Type': 'application/json'
-      }
-    });
+  if (profileResp.ok) {
+    const smmJson = profileResp.data;
+    const wrapper = useFastPath ? smmJson?.profile : smmJson?.[config.wrapperKey];
+    const stats = smmJson?.stats;
+    if (wrapper && stats) {
+      // Pick best follower count.
+      // - For TikTok: prefer /tiktok-account-stats summaryStats.followers (matches cron behavior)
+      //   and fall back to profile call's stats.followersCount when stats endpoint is absent/zero
+      //   (zero-trap for niche accounts).
+      // - For other platforms: use profile call's stats.followersCount as before.
+      let chosenFollowers = stats.followersCount ?? 0;
+      let followersSource = 'profile-details';
 
-    if (smmR.ok) {
-      const smmJson = await smmR.json();
-      const wrapper = useFastPath ? smmJson?.profile : smmJson?.[config.wrapperKey];
-      const stats = smmJson?.stats;
-      if (wrapper && stats) {
-        fetchedData = {
-          masterID: wrapper.masterID || masterID || null,
-          followers: stats.followersCount ?? 0,
-          nickname: wrapper.name ?? socialHandle,
-          avatar_url: wrapper.image ?? null
-        };
-      } else {
-        fetchError = `SMM API returned 200 but missing wrapper/stats for "${socialHandle}"`;
+      if (platform === 'tiktok' && tiktokStatsResp?.ok) {
+        const sumF = tiktokStatsResp.data?.summaryStats?.followers;
+        if (typeof sumF === 'number' && sumF > 0) {
+          chosenFollowers = sumF;
+          followersSource = 'account-stats';
+        }
       }
+
+      fetchedData = {
+        masterID: wrapper.masterID || masterID || null,
+        followers: chosenFollowers,
+        nickname: wrapper.name ?? socialHandle,
+        avatar_url: wrapper.image ?? null,
+        followers_source: followersSource
+      };
     } else {
-      fetchError = `RapidAPI returned status ${smmR.status}`;
+      fetchError = `SMM API returned 200 but missing wrapper/stats for "${socialHandle}"`;
     }
-  } catch (err) {
-    fetchError = `Fetch failed: ${err.message}`;
+  } else {
+    fetchError = `RapidAPI ${profileResp.status}`;
   }
 
   const now = Date.now();
@@ -163,6 +214,7 @@ export default async function handler(req, res) {
     ok: !!fetchedData,
     platform,
     artist: clean[idx],
+    followers_source: fetchedData?.followers_source ?? null,
     fetch_error: fetchError
   });
 }
