@@ -85,7 +85,14 @@ export default async function handler(req, res) {
   // Handle can be passed with or without leading "@" — strip it just in case.
   async function fetchYouTubeData(handle) {
     const cleanHandle = handle.replace(/^@+/, '');
-    const apiUrl = `${YT_BASE}/channels?part=statistics,snippet&forHandle=${encodeURIComponent(cleanHandle)}&key=${ytApiKey}`;
+    // Channel IDs are 24 chars starting with "UC" — look those up by id= (works for
+    // channels that never claimed a modern @handle, e.g. PARTYNEXTDOOR). Everything
+    // else uses forHandle=.
+    const isChannelId = /^UC[\w-]{22}$/.test(cleanHandle);
+    const lookupParam = isChannelId
+      ? `id=${encodeURIComponent(cleanHandle)}`
+      : `forHandle=${encodeURIComponent(cleanHandle)}`;
+    const apiUrl = `${YT_BASE}/channels?part=statistics,snippet&${lookupParam}&key=${ytApiKey}`;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const r = await fetch(apiUrl);
