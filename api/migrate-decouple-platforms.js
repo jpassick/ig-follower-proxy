@@ -54,7 +54,7 @@ function extractPlatform(artist, prefix) {
   };
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   // Admin gate
   const pw = req.headers['x-admin-password'] || (req.query && req.query.pw);
   if (pw !== process.env.ADMIN_PASSWORD) {
@@ -169,4 +169,4 @@ module.exports = async (req, res) => {
   } catch (e) {
     return res.status(500).json({ error: e.message, stack: e.stack });
   }
-};
+}
