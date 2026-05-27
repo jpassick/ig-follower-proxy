@@ -1,432 +1,217 @@
-const SMM_BASE = 'https://social-media-master.p.rapidapi.com';
-const YT_BASE = 'https://www.googleapis.com/youtube/v3';
+// Daily YouTube/Twitter/Facebook snapshot cron. Loops the 3 platforms internally
+// (no query strings in cron paths per Vercel constraint). Same pattern as TT cron.
 
-const PLATFORMS = {
-  youtube: {
-    provider: 'youtube_data_api'
+const PLATFORMS = [
+  {
+    name: 'youtube',
+    rosterKey: 'youtube-roster',
+    snapshotsKey: 'youtube-snapshots',
+    lastRefreshedKey: 'youtube-last-refreshed',
+    smmUrlPath: '/youtube-channel-details',
+    smmUrlWrapper: 'channel',
+    profileUrl: (h) => `https://www.youtube.com/@${h}`
   },
-  twitter: {
-    provider: 'smm',
-    dailyEndpoint: '/twitter-account-stats',
-    daysParam: 'days',
-    daysValue: '7',
-    extraParams: '',
-    detailsEndpoint: '/twitter-user-account',
-    detailsProfileUrl: handle => `https://x.com/${handle}`,
-    detailsWrapper: 'profile',
-    statsArrayKey: 'dailyStats',
-    followersField: 'followers',
-    hasSummaryStats: true
+  {
+    name: 'twitter',
+    rosterKey: 'twitter-roster',
+    snapshotsKey: 'twitter-snapshots',
+    lastRefreshedKey: 'twitter-last-refreshed',
+    smmUrlPath: '/twitter-user-account',
+    smmUrlWrapper: 'profile',
+    profileUrl: (h) => `https://x.com/${h}`
   },
-  facebook: {
-    provider: 'smm',
-    dailyEndpoint: '/facebook-account-stats',
-    daysParam: 'days',
-    daysValue: '7',
-    extraParams: '',
-    detailsEndpoint: '/facebook-user-account',
-    detailsProfileUrl: handle => `https://www.facebook.com/${handle}`,
-    detailsWrapper: 'profile',
-    statsArrayKey: 'dailyStats',
-    followersField: 'followers',
-    hasSummaryStats: true
+  {
+    name: 'facebook',
+    rosterKey: 'facebook-roster',
+    snapshotsKey: 'facebook-snapshots',
+    lastRefreshedKey: 'facebook-last-refreshed',
+    smmUrlPath: '/facebook-user-account',
+    smmUrlWrapper: 'profile',
+    profileUrl: (h) => `https://www.facebook.com/${h}`
   }
-};
+];
+
+const SMM_HOST = 'social-media-master.p.rapidapi.com';
+const KV_URL = process.env.KV_REST_API_URL;
+const KV_TOKEN = process.env.KV_REST_API_TOKEN;
+const SMM_KEY = process.env.SMM_RAPIDAPI_KEY;
+const CRON_SECRET = process.env.CRON_SECRET;
+
+async function kvGet(key) {
+  const r = await fetch(`${KV_URL}/get/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${KV_TOKEN}` }
+  });
+  if (!r.ok) return null;
+  const j = await r.json();
+  let val = j.result;
+  while (typeof val === 'string') {
+    try { val = JSON.parse(val); } catch (e) { break; }
+  }
+  if (Array.isArray(val) && val.length === 1 && typeof val[0] === 'string') {
+    try { val = JSON.parse(val[0]); } catch (e) { /* keep */ }
+  }
+  while (typeof val === 'string') {
+    try { val = JSON.parse(val); } catch (e) { break; }
+  }
+  return val;
+}
+
+async function kvSet(key, value) {
+  const body = JSON.stringify([JSON.stringify(value)]);
+  const r = await fetch(`${KV_URL}/set/${encodeURIComponent(key)}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
+    body
+  });
+  return r.ok;
+}
+
+async function kvSetTimestamp(key, value) {
+  const body = JSON.stringify(value);
+  const r = await fetch(`${KV_URL}/set/${encodeURIComponent(key)}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
+    body
+  });
+  return r.ok;
+}
+
+async function smmByMasterID(masterID) {
+  const url = `https://${SMM_HOST}/universal-profile-id?id=${encodeURIComponent(masterID)}`;
+  const r = await fetch(url, {
+    headers: { 'x-rapidapi-host': SMM_HOST, 'x-rapidapi-key': SMM_KEY }
+  });
+  if (!r.ok) return { ok: false, status: `error_${r.status}` };
+  const data = await r.json();
+  const p = data && data.profile;
+  if (!p || !p.masterID) return { ok: false, status: 'not_found' };
+  return {
+    ok: true,
+    masterID: p.masterID,
+    nickname: p.name || null,
+    profilePic: p.image || null,
+    followers: (data.stats && typeof data.stats.followersCount === 'number')
+      ? data.stats.followersCount : null
+  };
+}
+
+async function smmByURL(handle, platform) {
+  const url = `https://${SMM_HOST}${platform.smmUrlPath}?url=${encodeURIComponent(platform.profileUrl(handle))}`;
+  const r = await fetch(url, {
+    headers: { 'x-rapidapi-host': SMM_HOST, 'x-rapidapi-key': SMM_KEY }
+  });
+  if (!r.ok) return { ok: false, status: `error_${r.status}` };
+  const data = await r.json();
+  const w = data && data[platform.smmUrlWrapper];
+  if (!w || !w.masterID) return { ok: false, status: 'not_found' };
+  return {
+    ok: true,
+    masterID: w.masterID,
+    nickname: w.name || null,
+    profilePic: w.image || null,
+    followers: (data.stats && typeof data.stats.followersCount === 'number')
+      ? data.stats.followersCount : null
+  };
+}
+
+function utcDateString() {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+}
+
+async function processPlatform(platform) {
+  const roster = await kvGet(platform.rosterKey);
+  if (!Array.isArray(roster)) {
+    return { platform: platform.name, error: 'roster not array', skipped: true };
+  }
+  if (roster.length === 0) {
+    return { platform: platform.name, message: 'empty roster', skipped: true };
+  }
+
+  const rawSnapshots = await kvGet(platform.snapshotsKey);
+  if (rawSnapshots === null) {
+    return { platform: platform.name, error: 'failed to read snapshots; skipped', skipped: true };
+  }
+  let snapshotsArray, snapshotsShape;
+  if (Array.isArray(rawSnapshots)) {
+    snapshotsArray = rawSnapshots;
+    snapshotsShape = 'array';
+  } else if (rawSnapshots && Array.isArray(rawSnapshots.snapshots)) {
+    snapshotsArray = rawSnapshots.snapshots;
+    snapshotsShape = 'wrapped';
+  } else {
+    return { platform: platform.name, error: 'unexpected snapshots shape; skipped', skipped: true };
+  }
+
+  const ts = Date.now();
+  const date = utcDateString();
+  const artists = {};
+  let okCount = 0, errCount = 0;
+
+  for (const entry of roster) {
+    const handle = entry.handle;
+    if (!handle) continue;
+
+    let lookup;
+    if (entry.masterID) {
+      lookup = await smmByMasterID(entry.masterID);
+      if (!lookup.ok) lookup = await smmByURL(handle, platform);
+    } else {
+      lookup = await smmByURL(handle, platform);
+    }
+
+    if (lookup.ok) {
+      entry.masterID = lookup.masterID || entry.masterID;
+      if (lookup.nickname) entry.nickname = lookup.nickname;
+      if (lookup.profilePic) entry.profilePic = lookup.profilePic;
+      entry.followers = lookup.followers;
+      entry.status = 'ok';
+      entry.updatedAt = ts;
+      okCount++;
+      artists[handle] = { followers: lookup.followers, status: 'ok' };
+    } else {
+      entry.status = lookup.status || 'error';
+      entry.updatedAt = ts;
+      errCount++;
+      artists[handle] = {
+        followers: typeof entry.followers === 'number' ? entry.followers : null,
+        status: lookup.status || 'error'
+      };
+    }
+  }
+
+  snapshotsArray.push({ ts, date, artists });
+  const snapshotsValue = snapshotsShape === 'wrapped'
+    ? { ...(typeof rawSnapshots === 'object' ? rawSnapshots : {}), snapshots: snapshotsArray }
+    : snapshotsArray;
+
+  const writes = await Promise.all([
+    kvSet(platform.rosterKey, roster),
+    kvSet(platform.snapshotsKey, snapshotsValue),
+    kvSetTimestamp(platform.lastRefreshedKey, ts)
+  ]);
+
+  if (writes.some(w => !w)) {
+    return { platform: platform.name, error: 'one or more writes failed', writes, ok: okCount, err: errCount };
+  }
+
+  return { platform: platform.name, date, ts, total: roster.length, ok: okCount, errors: errCount };
+}
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = req.headers?.authorization || '';
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  const auth = req.headers.authorization || '';
+  if (auth !== `Bearer ${CRON_SECRET}`) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  const smmKey = process.env.SMM_RAPIDAPI_KEY;
-  const ytApiKey = process.env.YOUTUBE_API_KEY;
-  if (!url || !token) return res.status(500).json({ error: 'Redis not configured' });
-  if (!smmKey) return res.status(500).json({ error: 'SMM_RAPIDAPI_KEY not configured' });
-  // YOUTUBE_API_KEY is checked per-platform below — missing key skips YT, twitter/fb still run
-
-  const startTime = Date.now();
-  const TIME_BUDGET_MS = 270 * 1000;
-  const smmHeaders = {
-    'x-rapidapi-host': 'social-media-master.p.rapidapi.com',
-    'x-rapidapi-key': smmKey,
-    'Content-Type': 'application/json'
-  };
-
-  async function smmFetch(apiUrl) {
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const r = await fetch(apiUrl, { headers: smmHeaders });
-        if (r.ok) {
-          const json = await r.json();
-          return { ok: true, data: json };
-        }
-        if (attempt === 1) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          continue;
-        }
-        return { ok: false, status: `error_${r.status}` };
-      } catch (err) {
-        if (attempt === 1) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          continue;
-        }
-        return { ok: false, status: 'fetch_error' };
-      }
+  try {
+    const results = [];
+    for (const platform of PLATFORMS) {
+      const r = await processPlatform(platform);
+      results.push(r);
     }
+    return res.status(200).json({ results });
+  } catch (e) {
+    return res.status(500).json({ error: e.message, stack: e.stack });
   }
-
-  // YouTube Data API v3 fetcher. One call returns subscriber count + channel name + avatar.
-  // Handle can be passed with or without leading "@" — strip it just in case.
-  async function fetchYouTubeData(handle) {
-    const cleanHandle = handle.replace(/^@+/, '');
-    // Channel IDs are 24 chars starting with "UC" — look those up by id= (works for
-    // channels that never claimed a modern @handle, e.g. PARTYNEXTDOOR). Everything
-    // else uses forHandle=.
-    const isChannelId = /^UC[\w-]{22}$/.test(cleanHandle);
-    const lookupParam = isChannelId
-      ? `id=${encodeURIComponent(cleanHandle)}`
-      : `forHandle=${encodeURIComponent(cleanHandle)}`;
-    const apiUrl = `${YT_BASE}/channels?part=statistics,snippet&${lookupParam}&key=${ytApiKey}`;
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const r = await fetch(apiUrl);
-        if (r.ok) {
-          const json = await r.json();
-          const items = json?.items;
-          if (!Array.isArray(items) || items.length === 0) {
-            return { ok: false, status: 'not_found' };
-          }
-          const channel = items[0];
-          const stats = channel?.statistics || {};
-          const snippet = channel?.snippet || {};
-          const hidden = stats.hiddenSubscriberCount === true;
-          const nickname = snippet.title || null;
-          const avatar = snippet?.thumbnails?.default?.url
-                      || snippet?.thumbnails?.medium?.url
-                      || snippet?.thumbnails?.high?.url
-                      || null;
-          if (hidden) {
-            // Subscriber count is hidden by the channel owner. Preserve prior follower
-            // value and still update nickname/avatar — those are unaffected by the hide setting.
-            return { ok: false, status: 'hidden_count', nickname, avatar };
-          }
-          const subStr = stats.subscriberCount;
-          const followers = typeof subStr === 'string' ? parseInt(subStr, 10)
-                          : typeof subStr === 'number' ? subStr
-                          : null;
-          if (followers === null || Number.isNaN(followers) || followers < 0) {
-            return { ok: false, status: 'invalid_count', nickname, avatar };
-          }
-          return { ok: true, followers, nickname, avatar };
-        }
-        // Non-OK: 403 (quota exceeded / bad key), 400 (bad request), 5xx (transient)
-        // Retry once on transient errors
-        if (attempt === 1 && r.status >= 500) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          continue;
-        }
-        return { ok: false, status: `error_${r.status}` };
-      } catch (err) {
-        if (attempt === 1) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          continue;
-        }
-        return { ok: false, status: 'fetch_error' };
-      }
-    }
-  }
-
-  // Returns { followers, source } only if followers is a POSITIVE number.
-  // SMM returns 0/null for accounts it has no Daily Stats data for —
-  // we must reject those and force a fallback to the Details endpoint.
-  function parseDailyStats(data, config) {
-    if (config.hasSummaryStats) {
-      const f = data?.summaryStats?.followers;
-      if (typeof f === 'number' && f > 0) {
-        return { followers: f, source: 'summaryStats' };
-      }
-    }
-    const arr = data?.[config.statsArrayKey];
-    if (!Array.isArray(arr) || arr.length === 0) return null;
-    const sorted = arr.slice().sort((a, b) => {
-      const aTs = a?.dateISO ? new Date(a.dateISO).getTime() : 0;
-      const bTs = b?.dateISO ? new Date(b.dateISO).getTime() : 0;
-      return bTs - aTs;
-    });
-    const latest = sorted[0];
-    const f = latest?.[config.followersField];
-    if (typeof f !== 'number' || f <= 0) return null;
-    return { followers: f, source: 'dailyStatsArray', latestDate: latest.dateISO || latest.date };
-  }
-
-  function parseDetails(data, config) {
-    const wrapper = data?.[config.detailsWrapper];
-    const stats = data?.stats || wrapper?.stats;
-    if (!stats) return null;
-    const followers = (typeof stats.followersCount === 'number') ? stats.followersCount
-                    : (typeof stats.followers === 'number') ? stats.followers
-                    : null;
-    if (followers === null || followers <= 0) return null;
-    return {
-      followers,
-      masterID: wrapper?.masterID || null,
-      nickname: wrapper?.name || null,
-      avatar: wrapper?.image || null
-    };
-  }
-
-  // Read roster
-  const rosterR = await fetch(`${url}/get/roster`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  const rosterData = await rosterR.json();
-  let roster = [];
-  if (rosterData.result) {
-    let val = rosterData.result;
-    while (typeof val === 'string') {
-      try { val = JSON.parse(val); } catch(e) { break; }
-    }
-    if (Array.isArray(val) && val.length === 1 && typeof val[0] === 'string') {
-      try { val = JSON.parse(val[0]); } catch(e) {}
-    }
-    if (Array.isArray(val)) roster = val;
-  }
-  if (roster.length === 0) {
-    return res.status(404).json({ error: 'Roster is empty or could not be read' });
-  }
-
-  const today = new Date().toISOString().slice(0, 10);
-  const results = [];
-
-  for (const [platform, config] of Object.entries(PLATFORMS)) {
-    if (Date.now() - startTime > TIME_BUDGET_MS) {
-      results.push({ platform, skipped: 'time_budget_exceeded' });
-      continue;
-    }
-
-    // YouTube requires its own API key. If missing, skip platform entirely.
-    if (config.provider === 'youtube_data_api' && !ytApiKey) {
-      results.push({ platform, skipped: 'no_youtube_api_key' });
-      continue;
-    }
-
-    const fHandle      = `${platform}_handle`;
-    const fMasterID    = `${platform}_masterID`;
-    const fNickname    = `${platform}_nickname`;
-    const fProfilePic  = `${platform}_profilePic`;
-    const fFollowers   = `${platform}_followers`;
-    const fStatus      = `${platform}_status`;
-    const fLastUpdated = `${platform}_lastUpdated`;
-
-    const targets = roster
-      .map((a, idx) => ({ artist: a, idx }))
-      .filter(x =>
-        x.artist &&
-        typeof x.artist.handle === 'string' &&
-        typeof x.artist[fHandle] === 'string' &&
-        x.artist[fHandle].length > 0
-      );
-
-    let successCount = 0;
-    let failCount = 0;
-    let dailyStatsHits = 0;       // SMM-only
-    let detailsFallbacks = 0;     // SMM-only
-    let masterIDFetches = 0;      // SMM-only
-    let hiddenCounts = 0;          // YT-only
-    let notFound = 0;              // YT mostly
-    const snapshotEntry = { ts: Date.now(), date: today, artists: {} };
-
-    for (let i = 0; i < targets.length; i++) {
-      if (Date.now() - startTime > TIME_BUDGET_MS) {
-        console.log(`[${platform}] Time budget exceeded after ${i} artists`);
-        break;
-      }
-      const { artist, idx } = targets[i];
-      const socialHandle = roster[idx][fHandle];
-      let masterID = roster[idx][fMasterID] || null;
-      const now = Date.now();
-
-      let followers = null;
-      let nickname = null;
-      let avatar = null;
-      let resultStatus = null;
-
-      if (config.provider === 'youtube_data_api') {
-        // -------- YouTube Data API v3 path --------
-        const ytData = await fetchYouTubeData(socialHandle);
-        if (ytData.ok) {
-          followers = ytData.followers;
-          nickname = ytData.nickname;
-          avatar = ytData.avatar;
-        } else {
-          resultStatus = ytData.status;
-          if (ytData.status === 'hidden_count') {
-            hiddenCounts++;
-            // Preserve nickname/avatar even when count is hidden
-            if (ytData.nickname) nickname = ytData.nickname;
-            if (ytData.avatar) avatar = ytData.avatar;
-          } else if (ytData.status === 'not_found') {
-            notFound++;
-          }
-        }
-      } else {
-        // -------- SMM path (twitter / facebook) --------
-        if (masterID) {
-          const dailyUrl = `${SMM_BASE}${config.dailyEndpoint}?id=${encodeURIComponent(masterID)}&${config.daysParam}=${config.daysValue}${config.extraParams || ''}`;
-          const dailyR = await smmFetch(dailyUrl);
-          if (dailyR.ok) {
-            const parsed = parseDailyStats(dailyR.data, config);
-            if (parsed) {
-              followers = parsed.followers;
-              dailyStatsHits++;
-            }
-          } else {
-            resultStatus = dailyR.status;
-          }
-        }
-
-        if (followers === null) {
-          const detailsUrl = `${SMM_BASE}${config.detailsEndpoint}?url=${encodeURIComponent(config.detailsProfileUrl(socialHandle))}`;
-          const detailsR = await smmFetch(detailsUrl);
-          if (detailsR.ok) {
-            const parsed = parseDetails(detailsR.data, config);
-            if (parsed) {
-              followers = parsed.followers;
-              nickname = parsed.nickname;
-              avatar = parsed.avatar;
-              if (!masterID && parsed.masterID) {
-                masterID = parsed.masterID;
-                masterIDFetches++;
-              }
-              detailsFallbacks++;
-            } else {
-              resultStatus = resultStatus || 'not_found';
-            }
-          } else {
-            resultStatus = resultStatus || detailsR.status;
-          }
-        }
-      }
-
-      // Common update logic for all providers
-      if (followers !== null) {
-        const updates = {
-          [fFollowers]: followers,
-          [fStatus]: 'ok',
-          [fLastUpdated]: now
-        };
-        if (masterID) updates[fMasterID] = masterID;
-        if (nickname) updates[fNickname] = nickname;
-        if (avatar) updates[fProfilePic] = avatar;
-        roster[idx] = { ...roster[idx], ...updates };
-
-        snapshotEntry.artists[artist.handle] = {
-          [fHandle]: socialHandle,
-          followers,
-          status: 'ok'
-        };
-        successCount++;
-      } else {
-        // No fresh follower value — keep prior value in snapshot rather than zero/null.
-        // For YouTube hidden_count: still update nickname/avatar if we got them.
-        const priorFollowers = roster[idx][fFollowers] ?? null;
-        const updates = {
-          [fStatus]: resultStatus || 'error',
-          [fLastUpdated]: now
-        };
-        if (nickname) updates[fNickname] = nickname;
-        if (avatar) updates[fProfilePic] = avatar;
-        roster[idx] = { ...roster[idx], ...updates };
-
-        snapshotEntry.artists[artist.handle] = {
-          [fHandle]: socialHandle,
-          followers: priorFollowers,
-          status: resultStatus || 'error'
-        };
-        failCount++;
-        console.log(`[${platform}] @${artist.handle} (${socialHandle}) failed: ${resultStatus || 'unknown'}`);
-      }
-
-      // Inter-artist sleep — needed for SMM rate-limit safety, not needed for YT Data API
-      if (i < targets.length - 1) {
-        if (config.provider === 'smm') {
-          await new Promise(resolve => setTimeout(resolve, 1100));
-        }
-        // YouTube: no sleep (Google's quota is unit-based, not rate-limited)
-      }
-    }
-
-    const snapshotsKey = `${platform}-snapshots`;
-    const snapR = await fetch(`${url}/get/${snapshotsKey}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const snapData = await snapR.json();
-    let snapshots = [];
-    if (snapData.result) {
-      let val = snapData.result;
-      while (typeof val === 'string') {
-        try { val = JSON.parse(val); } catch(e) { break; }
-      }
-      if (Array.isArray(val) && val.length === 1 && typeof val[0] === 'string') {
-        try { val = JSON.parse(val[0]); } catch(e) {}
-      }
-      if (Array.isArray(val)) snapshots = val;
-    }
-    const existingIdx = snapshots.findIndex(s => s && s.date === today);
-    if (existingIdx >= 0) snapshots[existingIdx] = snapshotEntry;
-    else snapshots.push(snapshotEntry);
-    if (snapshots.length > 1095) snapshots = snapshots.slice(-1095);
-
-    await fetch(`${url}/set/${snapshotsKey}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify([JSON.stringify(snapshots)])
-    });
-
-    await fetch(`${url}/set/${platform}-last-refreshed`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(Date.now())
-    });
-
-    const result = {
-      platform,
-      provider: config.provider,
-      total: targets.length,
-      success: successCount,
-      fail: failCount
-    };
-    if (config.provider === 'smm') {
-      result.dailyStatsHits = dailyStatsHits;
-      result.detailsFallbacks = detailsFallbacks;
-      result.masterIDFetches = masterIDFetches;
-    } else if (config.provider === 'youtube_data_api') {
-      result.hiddenCounts = hiddenCounts;
-      result.notFound = notFound;
-    }
-    results.push(result);
-  }
-
-  const cleanRoster = roster.filter(a => a && typeof a.handle === 'string' && a.handle.length > 0);
-  await fetch(`${url}/set/roster`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify([JSON.stringify(cleanRoster)])
-  });
-
-  return res.status(200).json({
-    ok: true,
-    duration_ms: Date.now() - startTime,
-    results
-  });
 }
-
-export const config = {
-  maxDuration: 300
-};
