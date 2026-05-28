@@ -318,11 +318,11 @@ const MONTH_NAMES = ['January','February','March','April','May','June','July','A
 
 // Platform configuration — all 5 supported platforms
 const PLATFORMS = {
-  instagram: { label: 'Instagram', profileUrl: h => `https://www.instagram.com/${h}/`, isMain: true },
-  tiktok:    { label: 'TikTok',    profileUrl: h => `https://www.tiktok.com/@${h}`,    isMain: false, prefix: 'tiktok' },
-  youtube:   { label: 'YouTube',   profileUrl: h => `https://www.youtube.com/@${h}`,   isMain: false, prefix: 'youtube' },
-  twitter:   { label: 'X',         profileUrl: h => `https://x.com/${h}`,              isMain: false, prefix: 'twitter' },
-  facebook:  { label: 'Facebook',  profileUrl: h => `https://www.facebook.com/${h}`,   isMain: false, prefix: 'facebook' }
+  instagram: { label: 'Instagram', profileUrl: h => `https://www.instagram.com/${h}/`, isMain: true,  placeholder: 'Instagram handle, e.g. rodwave' },
+  tiktok:    { label: 'TikTok',    profileUrl: h => `https://www.tiktok.com/@${h}`,    isMain: false, prefix: 'tiktok',   placeholder: 'TikTok handle, e.g. rodwave' },
+  youtube:   { label: 'YouTube',   profileUrl: h => `https://www.youtube.com/@${h}`,   isMain: false, prefix: 'youtube',  placeholder: 'YouTube handle, e.g. rodwaveofficial' },
+  twitter:   { label: 'X',         profileUrl: h => `https://x.com/${h}`,              isMain: false, prefix: 'twitter',  placeholder: 'X handle, e.g. lildurk' },
+  facebook:  { label: 'Facebook',  profileUrl: h => `https://www.facebook.com/${h}`,   isMain: false, prefix: 'facebook', placeholder: 'Facebook handle, e.g. rodwave' }
 };
 const SOCIAL_PLATFORMS = ['tiktok', 'youtube', 'twitter', 'facebook']; // non-IG
 
@@ -330,6 +330,14 @@ let roster = [], snapshots = [], currentSort = { field: 'growth', dir: 'desc' },
 let currentRosterTab = 'all';
 let currentPlatform = localStorage.getItem(PLATFORM_KEY) || 'instagram';
 if (!PLATFORMS[currentPlatform]) currentPlatform = 'instagram';
+
+// Standalone per-platform rosters (decoupled from IG). Loaded from /api/{platform}-roster.
+const platformRosters = {
+  tiktok:   [],
+  youtube:  [],
+  twitter:  [],
+  facebook: []
+};
 
 // Per-platform data store (snapshots + lastRefreshed) for non-IG platforms
 const platformData = {
@@ -339,7 +347,24 @@ const platformData = {
   facebook: { snapshots: [], lastRefreshed: null }
 };
 
-let starred = new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]'));
+// Per-platform star sets. Instagram keeps its existing localStorage key for backward compatibility.
+const STARRED_KEYS = {
+  instagram: 'ig_starred_v1',
+  tiktok:    'ig_starred_tiktok_v1',
+  youtube:   'ig_starred_youtube_v1',
+  twitter:   'ig_starred_twitter_v1',
+  facebook:  'ig_starred_facebook_v1'
+};
+const starredSets = {
+  instagram: new Set(JSON.parse(localStorage.getItem('ig_starred_v1') || '[]')),
+  tiktok:    new Set(JSON.parse(localStorage.getItem('ig_starred_tiktok_v1') || '[]')),
+  youtube:   new Set(JSON.parse(localStorage.getItem('ig_starred_youtube_v1') || '[]')),
+  twitter:   new Set(JSON.parse(localStorage.getItem('ig_starred_twitter_v1') || '[]')),
+  facebook:  new Set(JSON.parse(localStorage.getItem('ig_starred_facebook_v1') || '[]'))
+};
+// Alias so existing Instagram code paths (getSortedRoster / renderInstagramRoster) keep working.
+let starred = starredSets.instagram;
+
 let anrStarred = new Set(JSON.parse(localStorage.getItem(STARRED_ANR_KEY) || '[]'));
 let anrRoster = [], anrSnapshots = [], anrCurrentSort = { field: 'pct', dir: 'desc' };
 let currentAnrRosterTab = 'all';
@@ -575,8 +600,9 @@ function getSnapPairForRange(handle, range, snapList) {
   return { cur: curEntry ? curEntry.followers : null, prev: prevEntry ? prevEntry.followers : null };
 }
 
-function saveStarred() { localStorage.setItem(STARRED_KEY, JSON.stringify([...starred])); }
-function toggleStar(handle) { if(starred.has(handle)) starred.delete(handle); else starred.add(handle); saveStarred(); renderRoster(); }
+// Star handling — per platform. Instagram set is aliased to `starred` for legacy code paths.
+function saveStarred() { localStorage.setItem(STARRED_KEYS[currentPlatform], JSON.stringify([...starredSets[currentPlatform]])); }
+function toggleStar(handle) { const s = starredSets[currentPlatform]; if (s.has(handle)) s.delete(handle); else s.add(handle); saveStarred(); renderRoster(); }
 function saveAnrStarred() { localStorage.setItem(STARRED_ANR_KEY, JSON.stringify([...anrStarred])); }
 function toggleAnrStar(handle) { if(anrStarred.has(handle)) anrStarred.delete(handle); else anrStarred.add(handle); saveAnrStarred(); renderAnrRoster(); }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -625,9 +651,10 @@ else if (savedAuth==='viewer') { isAdmin=false; isAnr=false; showApp(); }
 else if (savedAuth==='anr')    { isAdmin=false; isAnr=true;  showApp(); }
 
 async function loadAll() {
-  const platformLoaders = SOCIAL_PLATFORMS.flatMap(p => [loadPlatformSnapshots(p), loadPlatformStatus(p)]);
+  const platformLoaders = SOCIAL_PLATFORMS.flatMap(p => [loadPlatformRoster(p), loadPlatformSnapshots(p), loadPlatformStatus(p)]);
   await Promise.all([loadRoster(), loadSnapshots(), ...platformLoaders]);
   updatePlatformUI();
+  renderRoster();
 }
 async function loadRoster() {
   try { const res=await fetch('/api/roster'); const data=await res.json(); roster=data.roster||[]; renderRoster(); updateLastUpdated(); }
@@ -638,7 +665,20 @@ async function loadSnapshots() {
   catch(e) { snapshots=[]; }
 }
 
+// Standalone per-platform roster loader. Each /api/{platform}-roster returns a bare array.
+async function loadPlatformRoster(platform) {
+  try {
+    const res = await fetch(`/api/${platform}-roster`);
+    const data = await res.json();
+    platformRosters[platform] = Array.isArray(data) ? data : [];
+    if (currentPlatform === platform) renderRoster();
+  } catch(e) { platformRosters[platform] = []; }
+}
+
 // Generic per-platform snapshot loader. TikTok still uses /api/tiktok-snapshots; YT/X/FB use /api/social-snapshots.
+// Path D normalization: old snapshots are keyed by IG handle with an inner <platform>_handle field;
+// new snapshots are keyed by the platform handle directly. The "real handle" is the inner field if present,
+// otherwise the outer key — so historical + new data line up for growth periods.
 async function loadPlatformSnapshots(platform) {
   const url = platform === 'tiktok' ? '/api/tiktok-snapshots' : `/api/social-snapshots?platform=${platform}`;
   try {
@@ -647,7 +687,11 @@ async function loadPlatformSnapshots(platform) {
     platformData[platform].snapshots = (data.snapshots || []).map(s => ({
       date: s.date,
       ts: s.ts,
-      data: Object.entries(s.artists || {}).map(([handle, info]) => ({ handle, followers: info.followers, status: info.status }))
+      data: Object.entries(s.artists || {}).map(([outerKey, info]) => ({
+        handle: info[`${platform}_handle`] || outerKey,
+        followers: info.followers,
+        status: info.status
+      }))
     }));
     if (currentPlatform === platform) renderRoster();
   } catch(e) { platformData[platform].snapshots = []; }
@@ -715,8 +759,11 @@ function updatePlatformUI() {
       if (el) el.classList.toggle('active-platform', currentPlatform === p);
     });
   });
+  // Add + fetch row now appears on EVERY platform tab (admin only), with platform-aware placeholder.
   const addRow = document.getElementById('add-row-el');
-  if (addRow) addRow.style.display = (currentPlatform !== 'instagram' || !isAdmin) ? 'none' : 'flex';
+  if (addRow) addRow.style.display = isAdmin ? 'flex' : 'none';
+  const addInput = document.getElementById('add-input');
+  if (addInput) addInput.placeholder = PLATFORMS[currentPlatform].placeholder || 'Handle';
   const refreshBtn = document.getElementById('refresh-btn');
   if (refreshBtn) {
     refreshBtn.style.display = isAdmin ? 'inline-block' : 'none';
@@ -744,7 +791,7 @@ function updateLastUpdated() {
       return;
     }
   }
-  el.textContent = `${label} cron runs daily — set a handle to start tracking.`;
+  el.textContent = `${label} cron runs daily — add a handle above to start tracking.`;
 }
 
 async function persistRoster() {
@@ -846,17 +893,14 @@ function getSortedRoster(filterStarred=false){
   });
 }
 
-// Generic getter for non-IG platforms — returns sorted list of artists with handle for that platform
+// Sorted list for a standalone non-IG platform roster (used by CSV/PDF and rendering).
 function getSortedSocialRoster(platform, filterStarred=false){
-  const fHandle = `${platform}_handle`;
-  const fFollowers = `${platform}_followers`;
   const snapList = platformData[platform]?.snapshots || [];
-  let list = [...roster].map((r, i) => ({ ...r, _origIndex: i }));
-  list = list.filter(r => typeof r[fHandle] === 'string' && r[fHandle].length > 0);
-  if (filterStarred) list = list.filter(r => starred.has(r.handle));
+  let list = (platformRosters[platform] || []).map((r, i) => ({ ...r, _origIndex: i }));
+  if (filterStarred) list = list.filter(r => starredSets[platform].has(r.handle));
   list = list.map(r => {
     const pair = getSnapPairForRange(r.handle, mainRange, snapList);
-    const cur = pair.cur ?? r[fFollowers];
+    const cur = pair.cur ?? r.followers;
     const diff = (cur != null && pair.prev != null) ? cur - pair.prev : null;
     const p = (cur != null && pair.prev != null) ? pct(cur, pair.prev) : null;
     return { ...r, _cur: cur, _diff: diff, _pct: p };
@@ -915,39 +959,41 @@ function renderInstagramRoster(){
     const picUrl=r.profilePic?proxyUrl(r.profilePic):'';
     const avatarHtml=picUrl?`<img src="${picUrl}" class="avatar" alt="" onerror="this.outerHTML='<span class=\\'avatar-placeholder\\'></span>'" />`:`<span class="avatar-placeholder"></span>`;
     const removeBtn=isAdmin?`<td style="text-align:right"><button class="danger" onclick="removeHandle(${i})">✕</button></td>`:'';
-    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a>${renderFanBadge(r)}</div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${removeBtn}</tr>`;
+    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a>${renderFanBadge(r,'instagram')}</div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${removeBtn}</tr>`;
   }).join('');
 }
 
-// Generic renderer for tiktok/youtube/twitter/facebook
+// Generic renderer for tiktok/youtube/twitter/facebook — reads the standalone platformRosters[platform].
 function renderSocialRoster(platform){
   const cfg = PLATFORMS[platform];
-  const fHandle = `${platform}_handle`;
-  const fFollowers = `${platform}_followers`;
-  const fNickname = `${platform}_nickname`;
-  const fProfilePic = `${platform}_profilePic`;
-  const fStatus = `${platform}_status`;
   const snapList = platformData[platform]?.snapshots || [];
-
+  const starSet = starredSets[platform];
   const tbody = document.getElementById('roster-body');
   const isMyRoster = currentRosterTab === 'my';
   const cols = isAdmin ? 7 : 6;
-  let allArtists = roster.map((r, i) => ({ ...r, _origIndex: i }));
-  if (isMyRoster) allArtists = allArtists.filter(r => starred.has(r.handle));
-  if (!allArtists.length) {
-    tbody.innerHTML = `<tr><td colspan="${cols}" class="muted" style="padding:12px 0;font-size:13px;">${isMyRoster ? 'No starred artists yet — click ☆ next to any artist to add them here.' : 'No artists in roster'}</td></tr>`;
+  const list = platformRosters[platform] || [];
+
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="${cols}" class="muted" style="padding:12px 0;font-size:13px;">No ${cfg.label} accounts yet${isAdmin ? ' — add one above.' : '.'}</td></tr>`;
     return;
   }
-  allArtists = allArtists.map(r => {
-    const hasHandle = typeof r[fHandle] === 'string' && r[fHandle].length > 0;
-    if (!hasHandle) return { ...r, _cur: null, _diff: null, _pct: null, _hasHandle: false };
+
+  let items = list.map((r, i) => ({ ...r, _origIndex: i }));
+  if (isMyRoster) items = items.filter(r => starSet.has(r.handle));
+  if (isMyRoster && items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="${cols}" style="padding:12px 0;font-size:13px;color:#aaa;">No starred ${cfg.label} accounts yet — click ☆ to add them here.</td></tr>`;
+    return;
+  }
+
+  items = items.map(r => {
     const pair = getSnapPairForRange(r.handle, mainRange, snapList);
-    const cur = pair.cur ?? r[fFollowers];
+    const cur = pair.cur ?? r.followers;
     const diff = (cur != null && pair.prev != null) ? cur - pair.prev : null;
     const p = (cur != null && pair.prev != null) ? pct(cur, pair.prev) : null;
-    return { ...r, _cur: cur, _diff: diff, _pct: p, _hasHandle: true };
+    return { ...r, _cur: cur, _diff: diff, _pct: p };
   });
-  const withHandle = allArtists.filter(r => r._hasHandle).sort((a, b) => {
+
+  const sorted = items.sort((a, b) => {
     let av, bv;
     if (currentSort.field === 'followers') { av = a._cur ?? 0; bv = b._cur ?? 0; }
     else if (currentSort.field === 'growth') { av = a._diff ?? -Infinity; bv = b._diff ?? -Infinity; }
@@ -957,123 +1003,78 @@ function renderSocialRoster(platform){
     if (av > bv) return currentSort.dir === 'asc' ? 1 : -1;
     return 0;
   });
-  const withoutHandle = allArtists.filter(r => !r._hasHandle).sort((a, b) => (a.handle || '').localeCompare(b.handle || ''));
-  let rank = 0;
-  const rows = [...withHandle, ...withoutHandle].map(r => {
-    const isStarred = starred.has(r.handle);
-    const igUrl = `https://www.instagram.com/${r.handle}/`;
-    if (!r._hasHandle) {
-      const editBtn = isAdmin
-        ? `<button class="edit-tt-btn" onclick="setSocialHandle('${platform}', '${r.handle}')">+ Add ${cfg.label}</button>`
-        : `<span class="no-tt-pill">No ${cfg.label} linked</span>`;
-      const avatarHtml = `<span class="avatar-placeholder"></span>`;
-      const editCell = isAdmin ? '<td></td>' : '';
-      return `<tr class="dimmed-row"><td><span class="rank">—</span></td><td><button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${r.handle}')">${isStarred ? '★' : '☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a>${renderFanBadge(r)}</div></td><td colspan="3" style="text-align:left;">${editBtn}</td>${editCell}</tr>`;
-    }
-    rank++;
-    const socialUrl = cfg.profileUrl(r[fHandle]);
-    const fc = (r[fStatus] === 'ok' || r[fFollowers] != null)
-      ? `<strong>${fmt(r._cur ?? r[fFollowers])}</strong>`
-      : (r[fStatus] === 'pending' ? '<span class="muted">pending first cron</span>' : '<span class="pill-err">error</span>');
-    const picUrl = r[fProfilePic] ? proxyUrl(r[fProfilePic]) : '';
+
+  tbody.innerHTML = sorted.map((r, rankIdx) => {
+    const isStarred = starSet.has(r.handle);
+    const socialUrl = cfg.profileUrl(r.handle);
+    const fc = r.status === 'loading'
+      ? '<span class="muted">fetching...</span>'
+      : (r.status === 'ok' || r.followers != null)
+        ? `<strong>${fmt(r._cur ?? r.followers)}</strong>`
+        : (r.status === 'pending' ? '<span class="muted">pending first cron</span>' : '<span class="pill-err">error</span>');
+    const picUrl = r.profilePic ? proxyUrl(r.profilePic) : '';
     const avatarHtml = picUrl ? `<img src="${picUrl}" class="avatar" alt="" onerror="this.outerHTML='<span class=\\'avatar-placeholder\\'></span>'" />` : `<span class="avatar-placeholder"></span>`;
-    const editBtn = isAdmin ? `<td style="text-align:right"><button class="edit-tt-btn" onclick="setSocialHandle('${platform}', '${r.handle}')" title="Edit ${cfg.label} handle">✎</button></td>` : '';
-    const handleDisplay = r[fHandle] !== r.handle ? ` <span class="tt-handle-text">(@${r[fHandle]})</span>` : '';
-    return `<tr><td><span class="rank">${rank}</span></td><td><button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${r.handle}')">${isStarred ? '★' : '☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${socialUrl}" target="_blank">@${r.handle}</a>${handleDisplay}${renderFanBadge(r)}</div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${editBtn}</tr>`;
-  });
-  tbody.innerHTML = rows.join('');
+    const removeBtn = isAdmin ? `<td style="text-align:right"><button class="danger" onclick="removeSocialHandle('${platform}','${r.handle}')">✕</button></td>` : '';
+    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${socialUrl}" target="_blank">@${r.handle}</a>${renderFanBadge(r, platform)}</div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${removeBtn}</tr>`;
+  }).join('');
 }
 
-function setSocialHandle(platform, igHandle) {
-  const cfg = PLATFORMS[platform];
-  const fHandle = `${platform}_handle`;
-  const artist = roster.find(a => a.handle === igHandle);
-  const current = artist?.[fHandle] || '';
-  const promptMsg = current
-    ? `${cfg.label} handle for @${igHandle} (leave blank to clear):`
-    : `Enter ${cfg.label} handle for @${igHandle} (without @):`;
-  const val = prompt(promptMsg, current);
-  if (val === null) return;
-  saveSocialHandle(platform, igHandle, val.trim());
-}
-
-async function saveSocialHandle(platform, igHandle, socialHandle) {
-  const adminPw = sessionStorage.getItem('ig_admin_pw');
-  if (!adminPw) { showErr('Admin session expired. Please log out and log in again.'); return; }
-  const ind = document.getElementById('saving-indicator');
-  if (ind) ind.style.display = 'inline';
-  try {
-    const value = socialHandle === '' ? null : socialHandle;
-    let url, body;
-    if (platform === 'tiktok') {
-      url = '/api/update-tiktok-handle';
-      body = { password: adminPw, handle: igHandle, tiktok_handle: value };
-    } else {
-      url = '/api/update-social-handle';
-      body = { password: adminPw, platform, handle: igHandle, social_handle: value };
-    }
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      showErr('Failed to save: ' + (data.error || 'Unknown error'));
-    } else {
-      // Update local roster with the returned artist data
-      const idx = roster.findIndex(r => r.handle === igHandle);
-      if (idx !== -1 && data.artist) roster[idx] = data.artist;
-      renderRoster();
-      if (data.fetch_error) {
-        showErr(`Saved handle, but ${PLATFORMS[platform].label} lookup failed: ${data.fetch_error}. Will retry on next cron run.`);
-      }
-    }
-  } catch (e) {
-    showErr('Save failed: ' + e.message);
-  }
-  if (ind) ind.style.display = 'none';
-}
-
-function renderFanBadge(r) {
+function renderFanBadge(r, platform = 'instagram') {
   const isFan = r.is_fan_page === true;
   if (isAdmin) {
     const cls = isFan ? 'fan-flagged' : 'fan-unflagged';
     const label = isFan ? 'FAN' : '+ FAN';
     const title = isFan ? 'Click to unmark as fan page' : 'Click to mark as fan page';
-    return `<button class="fan-toggle-btn ${cls}" onclick="toggleFanPageFlag('${r.handle}')" title="${title}">${label}</button>`;
+    return `<button class="fan-toggle-btn ${cls}" onclick="toggleFanPageFlag('${r.handle}','${platform}')" title="${title}">${label}</button>`;
   }
   return isFan ? `<span class="fan-pill">FAN</span>` : '';
 }
 
-function toggleFanPageFlag(igHandle) {
-  const artist = roster.find(a => a.handle === igHandle);
+function toggleFanPageFlag(handle, platform = 'instagram') {
+  let artist;
+  if (platform === 'instagram') artist = roster.find(a => a.handle === handle);
+  else artist = (platformRosters[platform] || []).find(a => a.handle === handle);
   if (!artist) return;
   const currentlyFan = artist.is_fan_page === true;
   const msg = currentlyFan
-    ? `Remove fan-page flag from @${igHandle}? It will no longer show the FAN badge.`
-    : `Mark @${igHandle} as a fan page? A FAN badge will appear next to its name.`;
+    ? `Remove fan-page flag from @${handle}? It will no longer show the FAN badge.`
+    : `Mark @${handle} as a fan page? A FAN badge will appear next to its name.`;
   if (!confirm(msg)) return;
-  saveFanPageFlag(igHandle, !currentlyFan);
+  saveFanPageFlag(handle, !currentlyFan, platform);
 }
 
-async function saveFanPageFlag(igHandle, isFanPage) {
+async function saveFanPageFlag(handle, isFanPage, platform = 'instagram') {
   const adminPw = sessionStorage.getItem('ig_admin_pw');
   if (!adminPw) { showErr('Admin session expired. Please log out and log in again.'); return; }
   const ind = document.getElementById('saving-indicator');
   if (ind) ind.style.display = 'inline';
   try {
-    const res = await fetch('/api/update-fan-page-flag', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ password: adminPw, handle: igHandle, isFanPage })
-    });
-    const data = await res.json();
-    if (!data.ok) { showErr('Failed to save: ' + (data.error || 'Unknown error')); }
-    else {
-      const idx = roster.findIndex(a => a.handle === igHandle);
-      if (idx !== -1) roster[idx].is_fan_page = isFanPage;
-      renderRoster();
+    if (platform === 'instagram') {
+      const res = await fetch('/api/update-fan-page-flag', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ password: adminPw, handle, isFanPage })
+      });
+      const data = await res.json();
+      if (!data.ok) { showErr('Failed to save: ' + (data.error || 'Unknown error')); }
+      else {
+        const idx = roster.findIndex(a => a.handle === handle);
+        if (idx !== -1) roster[idx].is_fan_page = isFanPage;
+        renderRoster();
+      }
+    } else {
+      const res = await fetch(`/api/${platform}-roster`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json', 'x-admin-password': adminPw},
+        body: JSON.stringify({ handle, is_fan_page: isFanPage })
+      });
+      const data = await res.json();
+      if (!res.ok) { showErr('Failed to save: ' + (data.error || 'Unknown error')); }
+      else {
+        const idx = (platformRosters[platform] || []).findIndex(a => a.handle === handle);
+        if (idx !== -1) platformRosters[platform][idx].is_fan_page = isFanPage;
+        renderRoster();
+      }
     }
   } catch (e) { showErr('Save failed: ' + e.message); }
   if (ind) ind.style.display = 'none';
@@ -1146,7 +1147,14 @@ async function fetchFollowers(handle){
 function showErr(msg){const el=document.getElementById('err-box');el.textContent=msg;el.style.display='block';setTimeout(()=>el.style.display='none',7000);}
 function showAnrErr(msg){const el=document.getElementById('anr-err-box');el.textContent=msg;el.style.display='block';setTimeout(()=>el.style.display='none',7000);}
 
+// Add + fetch — dispatches by platform. Instagram keeps the existing /api/followers flow;
+// non-IG platforms POST to /api/{platform}-roster which performs the SMM lookup server-side.
 async function addHandle(){
+  if (currentPlatform === 'instagram') return addInstagramHandle();
+  return addSocialHandle(currentPlatform);
+}
+
+async function addInstagramHandle(){
   const input=document.getElementById('add-input'),handle=input.value.trim().replace('@','').toLowerCase();
   if(!handle)return;
   if(roster.find(r=>r.handle===handle)){showErr('@'+handle+' already in roster.');return;}
@@ -1157,6 +1165,62 @@ async function addHandle(){
   catch(e){entry.status='error';showErr('Error on @'+handle+': '+e.message);}
   renderRoster();updateLastUpdated();await persistRoster();
 }
+
+async function addSocialHandle(platform){
+  const cfg = PLATFORMS[platform];
+  const input = document.getElementById('add-input');
+  const handle = input.value.trim().replace(/^@/, '').toLowerCase();
+  if (!handle) return;
+  if ((platformRosters[platform] || []).find(r => r.handle === handle)) { showErr('@'+handle+' already in '+cfg.label+' roster.'); return; }
+  const adminPw = sessionStorage.getItem('ig_admin_pw');
+  if (!adminPw) { showErr('Admin session expired. Please log out and log in again.'); return; }
+  input.value = '';
+  const optimistic = { handle, masterID:null, nickname:null, profilePic:null, followers:null, status:'loading', updatedAt:Date.now(), is_fan_page:false };
+  platformRosters[platform].push(optimistic);
+  renderRoster();
+  try {
+    const res = await fetch(`/api/${platform}-roster`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'x-admin-password': adminPw },
+      body: JSON.stringify({ handle })
+    });
+    const data = await res.json();
+    const idx = platformRosters[platform].indexOf(optimistic);
+    if (!res.ok) {
+      if (idx !== -1) platformRosters[platform].splice(idx, 1);
+      showErr(`Failed to add @${handle}: ${data.error || res.status}`);
+    } else {
+      if (idx !== -1) platformRosters[platform][idx] = data;
+      else platformRosters[platform].push(data);
+      if (data.status && data.status !== 'ok') showErr(`Added @${handle}, but ${cfg.label} lookup returned "${data.status}". Will retry on next cron.`);
+    }
+  } catch(e) {
+    const idx = platformRosters[platform].indexOf(optimistic);
+    if (idx !== -1) platformRosters[platform].splice(idx, 1);
+    showErr('Add failed: ' + e.message);
+  }
+  renderRoster();
+  updateLastUpdated();
+}
+
+async function removeSocialHandle(platform, handle){
+  const cfg = PLATFORMS[platform];
+  if (!confirm(`Remove @${handle} from the ${cfg.label} roster? Its snapshot history is preserved.`)) return;
+  const adminPw = sessionStorage.getItem('ig_admin_pw');
+  if (!adminPw) { showErr('Admin session expired. Please log out and log in again.'); return; }
+  try {
+    const res = await fetch(`/api/${platform}-roster`, {
+      method:'DELETE',
+      headers:{ 'Content-Type':'application/json', 'x-admin-password': adminPw },
+      body: JSON.stringify({ handle })
+    });
+    const data = await res.json();
+    if (!res.ok) { showErr(`Failed to remove: ${data.error || res.status}`); return; }
+    platformRosters[platform] = (platformRosters[platform] || []).filter(r => r.handle !== handle);
+    renderRoster();
+  } catch(e) { showErr('Remove failed: ' + e.message); }
+}
+
 async function anrAddHandle(){
   const input=document.getElementById('anr-add-input'),handle=input.value.trim().replace('@','').toLowerCase();
   if(!handle)return;
@@ -1206,7 +1270,7 @@ async function retryHandle(i){
 }
 
 // Refresh All — platform-aware. Instagram uses /api/followers per artist (existing behavior).
-// Other platforms use /api/social-followers per artist (admin-protected, writes to Redis).
+// Non-IG platforms loop the standalone roster and call /api/refresh-social-entry per handle.
 async function refreshAll(){
   if (currentPlatform === 'instagram') return refreshInstagram();
   return refreshSocialPlatform(currentPlatform);
@@ -1229,26 +1293,25 @@ async function refreshInstagram(){
 
 async function refreshSocialPlatform(platform){
   const cfg = PLATFORMS[platform];
-  const fHandle = `${platform}_handle`;
   const adminPw = sessionStorage.getItem('ig_admin_pw');
   if (!adminPw) { showErr('Admin session expired. Please log out and log in again.'); return; }
-  const targets = roster.filter(r => typeof r[fHandle] === 'string' && r[fHandle].length > 0);
-  if (!targets.length) { showErr(`No artists have a ${cfg.label} handle set yet.`); return; }
+  const targets = platformRosters[platform] || [];
+  if (!targets.length) { showErr(`No ${cfg.label} accounts to refresh yet.`); return; }
   const btn = document.getElementById('refresh-btn'), pb = document.getElementById('progress-bar'), pf = document.getElementById('progress-fill');
   btn.disabled = true; btn.textContent = `Refreshing ${cfg.label}...`; pb.style.display = 'block'; pf.style.width = '0%';
   let succeeded = 0, failed = 0;
   for (let idx = 0; idx < targets.length; idx++) {
     const t = targets[idx];
     try {
-      const res = await fetch('/api/social-followers', {
+      const res = await fetch('/api/refresh-social-entry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: adminPw, platform, handle: t.handle })
       });
       const data = await res.json();
-      if (data.ok && data.artist) {
-        const i = roster.findIndex(r => r.handle === t.handle);
-        if (i !== -1) roster[i] = data.artist;
+      if (data.ok && data.entry) {
+        const i = (platformRosters[platform] || []).findIndex(r => r.handle === t.handle);
+        if (i !== -1) platformRosters[platform][i] = data.entry;
         succeeded++;
       } else { failed++; }
     } catch (e) { failed++; }
@@ -1260,6 +1323,7 @@ async function refreshSocialPlatform(platform){
   btn.disabled = false; btn.textContent = `↻ Refresh ${cfg.label}`;
   await loadPlatformStatus(platform);
   await loadPlatformSnapshots(platform);
+  renderRoster();
   updateLastUpdated();
   if (failed) showErr(`${cfg.label} refresh complete — ${succeeded} updated, ${failed} failed.`);
 }
@@ -1364,14 +1428,12 @@ function downloadInstagramCSV(){
 }
 function downloadSocialCSV(platform){
   const cfg = PLATFORMS[platform];
-  const fHandle = `${platform}_handle`;
-  const fFollowers = `${platform}_followers`;
   const sorted = getSortedSocialRoster(platform, currentRosterTab === 'my');
-  let csv = `Rank,Artist,${cfg.label} Handle,Followers,Follower Growth,Follower Growth %\n`;
+  let csv = `Rank,${cfg.label} Handle,Followers,Follower Growth,Follower Growth %\n`;
   sorted.forEach((r, idx) => {
     const growth = r._diff !== null ? (r._diff >= 0 ? '+' : '') + r._diff : '';
     const growthPct = r._pct !== null ? (r._pct >= 0 ? '+' : '') + r._pct.toFixed(2) + '%' : '';
-    csv += `${idx + 1},@${r.handle},@${r[fHandle]},${r._cur ?? r[fFollowers] ?? ''},${growth},${growthPct}\n`;
+    csv += `${idx + 1},@${r.handle},${r._cur ?? r.followers ?? ''},${growth},${growthPct}\n`;
   });
   const blob = new Blob([csv], {type: 'text/csv'}), url = URL.createObjectURL(blob), a = document.createElement('a');
   a.href = url; a.download = `Alamo-Santa-Anna-${cfg.label}-Report-${getFileDateStr()}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -1407,8 +1469,6 @@ function downloadInstagramPDF(){
 }
 function downloadSocialPDF(platform){
   const cfg = PLATFORMS[platform];
-  const fHandle = `${platform}_handle`;
-  const fFollowers = `${platform}_followers`;
   const { jsPDF } = window.jspdf; const doc = new jsPDF();
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const sorted = getSortedSocialRoster(platform, currentRosterTab === 'my');
@@ -1418,9 +1478,9 @@ function downloadSocialPDF(platform){
   const tableData = sorted.map((r, idx) => {
     const growth = r._diff !== null ? (r._diff >= 0 ? '+' : '') + Number(r._diff).toLocaleString() : '—';
     const growthPct = r._pct !== null ? (r._pct >= 0 ? '+' : '') + r._pct.toFixed(2) + '%' : '—';
-    return [idx + 1, `@${r.handle}`, `@${r[fHandle]}`, fmt(r._cur ?? r[fFollowers]), growth, growthPct];
+    return [idx + 1, `@${r.handle}`, fmt(r._cur ?? r.followers), growth, growthPct];
   });
-  doc.autoTable({startY:34,head:[['#','Artist',cfg.label,'Followers','Growth','Growth %']],body:tableData,styles:{fontSize:9,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:10},1:{cellWidth:45},2:{cellWidth:45},3:{cellWidth:30},4:{cellWidth:32},5:{cellWidth:32}}});
+  doc.autoTable({startY:34,head:[['#',`${cfg.label} Handle`,'Followers','Follower Growth','Follower Growth %']],body:tableData,styles:{fontSize:10,cellPadding:3},headStyles:{fillColor:[26,26,26],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[249,249,247]},columnStyles:{0:{cellWidth:12},1:{cellWidth:60},2:{cellWidth:35},3:{cellWidth:40},4:{cellWidth:40}}});
   doc.save(`Alamo-Santa-Anna-${cfg.label}-Report-${getFileDateStr()}.pdf`);
 }
 function anrDownloadPDF(){
