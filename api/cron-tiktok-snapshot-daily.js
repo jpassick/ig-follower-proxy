@@ -153,12 +153,13 @@ export default async function handler(req, res) {
         entry.status = 'ok';
         entry.updatedAt = ts;
         okCount++;
-        artists[handle] = { followers: lookup.followers, status: 'ok' };
+        artists[handle] = { tiktok_handle: handle, followers: lookup.followers, status: 'ok' };
       } else {
         entry.status = lookup.status || 'error';
         entry.updatedAt = ts;
         errCount++;
         artists[handle] = {
+          tiktok_handle: handle,
           followers: typeof entry.followers === 'number' ? entry.followers : null,
           status: lookup.status || 'error'
         };
