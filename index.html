@@ -852,7 +852,7 @@ function getSortedRoster(filterStarred=false){
     const pair=getSnapPairForRange(r.handle, mainRange, snapshots);
     const cur=pair.cur??r.followers;
     const diff=(cur!=null&&pair.prev!=null)?cur-pair.prev:null;
-    const p=(cur!=null&&pair.prev!=null)?pct(cur,pair.prev):null;
+    const p=(cur!=null&&pair.prev!=null)?(cur-pair.prev)/pair.prev*100:null;
     return{...r,_origIndex:i,_cur:cur,_diff:diff,_pct:p};
   });
   if(filterStarred) list=list.filter(r=>starred.has(r.handle));
@@ -896,7 +896,7 @@ function getSortedAnrRoster(filterStarred=false){
     const pair=getSnapPairForRange(r.handle, anrRange, anrSnapshots);
     const cur=pair.cur??r.followers;
     const diff=(cur!=null&&pair.prev!=null)?cur-pair.prev:null;
-    const p=(cur!=null&&pair.prev!=null)?pct(cur,pair.prev):null;
+    const p=(cur!=null&&pair.prev!=null)?(cur-pair.prev)/pair.prev*100:null;
     return{...r,_origIndex:i,_cur:cur,_diff:diff,_pct:p};
   });
   if(filterStarred) list=list.filter(r=>anrStarred.has(r.handle));
