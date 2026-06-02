@@ -73,7 +73,20 @@ function isAdmin(req) {
 
 function normalizeHandle(h) {
   if (!h || typeof h !== 'string') return null;
-  return h.trim().replace(/^@/, '').toLowerCase();
+  h = h.trim();
+  // Accept full Facebook URLs and extract the handle/ID
+  try {
+    const u = new URL(h.startsWith('http') ? h : 'https://' + h);
+    if (u.hostname.includes('facebook.com')) {
+      // Handle profile.php?id=123456
+      const id = u.searchParams.get('id');
+      if (id) return id;
+      // Handle /handle or /pages/name/id
+      const parts = u.pathname.split('/').filter(Boolean);
+      if (parts.length) h = parts[parts.length - 1];
+    }
+  } catch(e) { /* not a URL, fall through */ }
+  return h.replace(/^@/, '').toLowerCase();
 }
 
 export default async function handler(req, res) {
