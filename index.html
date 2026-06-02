@@ -812,8 +812,7 @@ function buildWeekWindows() {
 }
 function stepWeek(dir) { const n=currentWeekIdx+dir; if(n<0||n>=weekWindows.length)return; currentWeekIdx=n; renderReport(); }
 
-function fmt(n){if(n==null)return'—';if(n>=1000000)return(n/1000000).toFixed(2)+'M';if(n>=1000)return(n/1000).toFixed(1)+'K';return Number(n).toLocaleString();}
-function pct(cur,prev){if(!prev)return null;return(cur-prev)/prev*100;}
+function fmt(n,exact){if(n==null)return'—';if(exact)return Number(n).toLocaleString();if(n>=1000000)return(n/1000000).toFixed(2)+'M';if(n>=1000)return(n/1000).toFixed(1)+'K';return Number(n).toLocaleString();}
 function renderPct(p){if(p===null)return'<span class="muted">—</span>';const sign=p>0?'+':'',cls=p>0?'up':p<0?'down':'muted',arrow=p>0?'▲':p<0?'▼':'–';return`<span class="${cls}">${arrow} ${sign}${p.toFixed(2)}%</span>`;}
 function renderGrowth(diff){if(diff===null)return'<span class="muted">—</span>';const cls=diff>0?'up':diff<0?'down':'muted',sign=diff>0?'+':'';return`<span class="${cls}">${sign}${Number(diff).toLocaleString()}</span>`;}
 
@@ -984,7 +983,7 @@ function renderSocialRoster(platform){
     const fc = r.status === 'loading'
       ? '<span class="muted">fetching...</span>'
       : (r.status === 'ok' || r.followers != null)
-        ? `<strong>${fmt(r._cur ?? r.followers)}</strong>`
+        ? `<strong>${fmt(r._cur ?? r.followers, platform === 'youtube')}</strong>`
         : r.status === 'pending'
           ? '<span class="muted">pending first cron</span>'
           : `<span class="pill-err">error</span>${isAdmin ? ` <button style="font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid #ddd;background:#fff;cursor:pointer;" onclick="retrySocialHandle('${platform}','${r.handle}')">↻</button>` : ''}`;
