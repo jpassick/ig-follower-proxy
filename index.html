@@ -1380,7 +1380,7 @@ function renderReport(){
   const sorted=[...latest.data].map(d=>{
     const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
     const diff=pe?d.followers-pe.followers:null;
-    const p=pe?pct(d.followers,pe.followers):null;
+    const p=pe?(d.followers-pe.followers)/pe.followers*100:null;
     return{...d,_diff:diff,_pct:p};
   }).sort((a,b)=>(b._diff??-Infinity)-(a._diff??-Infinity));
   tbody.innerHTML=sorted.map((d,idx)=>{
@@ -1402,7 +1402,7 @@ function exportReport(){
   let txt=`Instagram Weekly Report — ${label}\n${'─'.repeat(44)}\n`;
   [...latest.data].sort((a,b)=>b.followers-a.followers).forEach((d,idx)=>{
     const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
-    const p=pe?pct(d.followers,pe.followers):null;
+    const p=pe?(d.followers-pe.followers)/pe.followers*100:null;
     const diff=pe?d.followers-pe.followers:null;
     const ch=diff!==null?` | ${diff>=0?'+':''}${Number(diff).toLocaleString()} (${p!=null?(p>=0?'+':'')+p.toFixed(2)+'%':'—'})`:'  | first entry';
     txt+=`${idx+1}. @${d.handle}: ${fmt(d.followers)}${ch}\n`;
@@ -1509,7 +1509,7 @@ function downloadReportPDF(){
   const{jsPDF}=window.jspdf;const doc=new jsPDF();
   const sorted=[...latest.data].sort((a,b)=>b.followers-a.followers).map(d=>{
     const pe=prev?prev.data.find(p=>p.handle===d.handle):null;
-    return{...d,_diff:pe?d.followers-pe.followers:null,_pct:pe?pct(d.followers,pe.followers):null};
+    return{...d,_diff:pe?d.followers-pe.followers:null,_pct:pe?(d.followers-pe.followers)/pe.followers*100:null};
   });
   doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('Weekly Follower Report',14,20);
   doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(120);
