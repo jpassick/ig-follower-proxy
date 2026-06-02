@@ -316,7 +316,6 @@ const PLATFORM_KEY = 'current_platform_v1';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-// Platform configuration — all 5 supported platforms
 const PLATFORMS = {
   instagram: { label: 'Instagram', profileUrl: h => `https://www.instagram.com/${h}/`, isMain: true,  placeholder: 'Instagram handle, e.g. rodwave' },
   tiktok:    { label: 'TikTok',    profileUrl: h => `https://www.tiktok.com/@${h}`,    isMain: false, prefix: 'tiktok',   placeholder: 'TikTok handle, e.g. rodwave' },
@@ -324,22 +323,14 @@ const PLATFORMS = {
   twitter:   { label: 'X',         profileUrl: h => `https://x.com/${h}`,              isMain: false, prefix: 'twitter',  placeholder: 'X handle, e.g. lildurk' },
   facebook:  { label: 'Facebook',  profileUrl: h => `https://www.facebook.com/${h}`,   isMain: false, prefix: 'facebook', placeholder: 'Facebook handle, e.g. rodwave' }
 };
-const SOCIAL_PLATFORMS = ['tiktok', 'youtube', 'twitter', 'facebook']; // non-IG
+const SOCIAL_PLATFORMS = ['tiktok', 'youtube', 'twitter', 'facebook'];
 
 let roster = [], snapshots = [], currentSort = { field: 'growth', dir: 'desc' }, isAdmin = false, isAnr = false;
 let currentRosterTab = 'all';
 let currentPlatform = localStorage.getItem(PLATFORM_KEY) || 'instagram';
 if (!PLATFORMS[currentPlatform]) currentPlatform = 'instagram';
 
-// Standalone per-platform rosters (decoupled from IG). Loaded from /api/{platform}-roster.
-const platformRosters = {
-  tiktok:   [],
-  youtube:  [],
-  twitter:  [],
-  facebook: []
-};
-
-// Per-platform data store (snapshots + lastRefreshed) for non-IG platforms
+const platformRosters = { tiktok: [], youtube: [], twitter: [], facebook: [] };
 const platformData = {
   tiktok:   { snapshots: [], lastRefreshed: null },
   youtube:  { snapshots: [], lastRefreshed: null },
@@ -347,7 +338,6 @@ const platformData = {
   facebook: { snapshots: [], lastRefreshed: null }
 };
 
-// Per-platform star sets. Instagram keeps its existing localStorage key for backward compatibility.
 const STARRED_KEYS = {
   instagram: 'ig_starred_v1',
   tiktok:    'ig_starred_tiktok_v1',
@@ -362,7 +352,6 @@ const starredSets = {
   twitter:   new Set(JSON.parse(localStorage.getItem('ig_starred_twitter_v1') || '[]')),
   facebook:  new Set(JSON.parse(localStorage.getItem('ig_starred_facebook_v1') || '[]'))
 };
-// Alias so existing Instagram code paths (getSortedRoster / renderInstagramRoster) keep working.
 let starred = starredSets.instagram;
 
 let anrStarred = new Set(JSON.parse(localStorage.getItem(STARRED_ANR_KEY) || '[]'));
@@ -575,8 +564,6 @@ function getSnapPairForRange(handle, range, snapList) {
   const curEntry = endSnap ? endSnap.data.find(d => d.handle === handle) : null;
   let prevEntry  = startSnap ? startSnap.data.find(d => d.handle === handle) : null;
 
-  // When start and end resolve to the same snapshot (e.g. "Today" with one snap so far),
-  // walk backwards through earlier snaps until we find one that contains this handle.
   if (endSnap && startSnap && endSnap === startSnap) {
     let altEntry = null;
     for (let i = endSnapIdx - 1; i >= 0; i--) {
@@ -586,9 +573,6 @@ function getSnapPairForRange(handle, range, snapList) {
     return { cur: curEntry ? curEntry.followers : null, prev: altEntry ? altEntry.followers : null };
   }
 
-  // If startSnap exists but has no entry for this handle (tracking started mid-window
-  // for this platform — common on FB/X/YT where coverage built up over time), walk forward
-  // to the first snap that does have it, but never past endSnap so prev stays in window.
   if (startSnap && !prevEntry) {
     for (let i = startSnapIdx + 1; i < snapList.length; i++) {
       if (snapList[i] === endSnap) break;
@@ -600,7 +584,6 @@ function getSnapPairForRange(handle, range, snapList) {
   return { cur: curEntry ? curEntry.followers : null, prev: prevEntry ? prevEntry.followers : null };
 }
 
-// Star handling — per platform. Instagram set is aliased to `starred` for legacy code paths.
 function saveStarred() { localStorage.setItem(STARRED_KEYS[currentPlatform], JSON.stringify([...starredSets[currentPlatform]])); }
 function toggleStar(handle) { const s = starredSets[currentPlatform]; if (s.has(handle)) s.delete(handle); else s.add(handle); saveStarred(); renderRoster(); }
 function saveAnrStarred() { localStorage.setItem(STARRED_ANR_KEY, JSON.stringify([...anrStarred])); }
@@ -665,7 +648,6 @@ async function loadSnapshots() {
   catch(e) { snapshots=[]; }
 }
 
-// Standalone per-platform roster loader. Each /api/{platform}-roster returns a bare array.
 async function loadPlatformRoster(platform) {
   try {
     const res = await fetch(`/api/${platform}-roster`);
@@ -675,10 +657,6 @@ async function loadPlatformRoster(platform) {
   } catch(e) { platformRosters[platform] = []; }
 }
 
-// Generic per-platform snapshot loader. TikTok still uses /api/tiktok-snapshots; YT/X/FB use /api/social-snapshots.
-// Path D normalization: old snapshots are keyed by IG handle with an inner <platform>_handle field;
-// new snapshots are keyed by the platform handle directly. The "real handle" is the inner field if present,
-// otherwise the outer key — so historical + new data line up for growth periods.
 async function loadPlatformSnapshots(platform) {
   const url = platform === 'tiktok' ? '/api/tiktok-snapshots' : `/api/social-snapshots?platform=${platform}`;
   try {
@@ -759,7 +737,6 @@ function updatePlatformUI() {
       if (el) el.classList.toggle('active-platform', currentPlatform === p);
     });
   });
-  // Add + fetch row now appears on EVERY platform tab (admin only), with platform-aware placeholder.
   const addRow = document.getElementById('add-row-el');
   if (addRow) addRow.style.display = isAdmin ? 'flex' : 'none';
   const addInput = document.getElementById('add-input');
@@ -781,7 +758,6 @@ function updateLastUpdated() {
     el.textContent='';
     return;
   }
-  // Non-IG platforms
   const lr = platformData[currentPlatform]?.lastRefreshed;
   const label = PLATFORMS[currentPlatform].label;
   if (lr) {
@@ -893,7 +869,6 @@ function getSortedRoster(filterStarred=false){
   });
 }
 
-// Sorted list for a standalone non-IG platform roster (used by CSV/PDF and rendering).
 function getSortedSocialRoster(platform, filterStarred=false){
   const snapList = platformData[platform]?.snapshots || [];
   let list = (platformRosters[platform] || []).map((r, i) => ({ ...r, _origIndex: i }));
@@ -963,7 +938,6 @@ function renderInstagramRoster(){
   }).join('');
 }
 
-// Generic renderer for tiktok/youtube/twitter/facebook — reads the standalone platformRosters[platform].
 function renderSocialRoster(platform){
   const cfg = PLATFORMS[platform];
   const snapList = platformData[platform]?.snapshots || [];
@@ -1011,7 +985,9 @@ function renderSocialRoster(platform){
       ? '<span class="muted">fetching...</span>'
       : (r.status === 'ok' || r.followers != null)
         ? `<strong>${fmt(r._cur ?? r.followers)}</strong>`
-        : (r.status === 'pending' ? '<span class="muted">pending first cron</span>' : '<span class="pill-err">error</span>');
+        : r.status === 'pending'
+          ? '<span class="muted">pending first cron</span>'
+          : `<span class="pill-err">error</span>${isAdmin ? ` <button style="font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid #ddd;background:#fff;cursor:pointer;" onclick="retrySocialHandle('${platform}','${r.handle}')">↻</button>` : ''}`;
     const picUrl = r.profilePic ? proxyUrl(r.profilePic) : '';
     const avatarHtml = picUrl ? `<img src="${picUrl}" class="avatar" alt="" onerror="this.outerHTML='<span class=\\'avatar-placeholder\\'></span>'" />` : `<span class="avatar-placeholder"></span>`;
     const removeBtn = isAdmin ? `<td style="text-align:right"><button class="danger" onclick="removeSocialHandle('${platform}','${r.handle}')">✕</button></td>` : '';
@@ -1147,8 +1123,6 @@ async function fetchFollowers(handle){
 function showErr(msg){const el=document.getElementById('err-box');el.textContent=msg;el.style.display='block';setTimeout(()=>el.style.display='none',7000);}
 function showAnrErr(msg){const el=document.getElementById('anr-err-box');el.textContent=msg;el.style.display='block';setTimeout(()=>el.style.display='none',7000);}
 
-// Add + fetch — dispatches by platform. Instagram keeps the existing /api/followers flow;
-// non-IG platforms POST to /api/{platform}-roster which performs the SMM lookup server-side.
 async function addHandle(){
   if (currentPlatform === 'instagram') return addInstagramHandle();
   return addSocialHandle(currentPlatform);
@@ -1269,8 +1243,35 @@ async function retryHandle(i){
   renderRoster();updateLastUpdated();await persistRoster();
 }
 
-// Refresh All — platform-aware. Instagram uses /api/followers per artist (existing behavior).
-// Non-IG platforms loop the standalone roster and call /api/refresh-social-entry per handle.
+async function retrySocialHandle(platform, handle) {
+  const adminPw = sessionStorage.getItem('ig_admin_pw');
+  if (!adminPw) { showErr('Admin session expired. Please log out and log in again.'); return; }
+  const list = platformRosters[platform] || [];
+  const entry = list.find(r => r.handle === handle);
+  if (!entry) return;
+  entry.status = 'loading';
+  renderRoster();
+  try {
+    const res = await fetch('/api/social-followers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: adminPw, platform, handle })
+    });
+    const data = await res.json();
+    if (data.ok && data.entry) {
+      const i = list.findIndex(r => r.handle === handle);
+      if (i !== -1) platformRosters[platform][i] = data.entry;
+    } else {
+      entry.status = 'error';
+    }
+  } catch (e) {
+    entry.status = 'error';
+    showErr(`Retry failed for @${handle}: ${e.message}`);
+  }
+  renderRoster();
+  updateLastUpdated();
+}
+
 async function refreshAll(){
   if (currentPlatform === 'instagram') return refreshInstagram();
   return refreshSocialPlatform(currentPlatform);
