@@ -876,7 +876,7 @@ function getSortedSocialRoster(platform, filterStarred=false){
     const pair = getSnapPairForRange(r.handle, mainRange, snapList);
     const cur = pair.cur ?? r.followers;
     const diff = (cur != null && pair.prev != null) ? cur - pair.prev : null;
-    const p = (cur != null && pair.prev != null) ? pct(cur, pair.prev) : null;
+    const p = (cur != null && pair.prev != null) ? (cur - pair.prev) / pair.prev * 100 : null;
     return { ...r, _cur: cur, _diff: diff, _pct: p };
   });
   return list.sort((a, b) => {
@@ -962,7 +962,7 @@ function renderSocialRoster(platform){
     const pair = getSnapPairForRange(r.handle, mainRange, snapList);
     const cur = pair.cur ?? r.followers;
     const diff = (cur != null && pair.prev != null) ? cur - pair.prev : null;
-    const p = (cur != null && pair.prev != null) ? pct(cur, pair.prev) : null;
+    const p = (cur != null && pair.prev != null) ? (cur - pair.prev) / pair.prev * 100 : null;
     return { ...r, _cur: cur, _diff: diff, _pct: p };
   });
 
