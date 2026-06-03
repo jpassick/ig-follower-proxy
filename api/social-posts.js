@@ -10,7 +10,6 @@ export default async function handler(req, res) {
 
   const masterID = typeof req.query.masterID === 'string' ? req.query.masterID.trim() : null;
   const platform = typeof req.query.platform === 'string' ? req.query.platform.trim().toLowerCase() : null;
-  const month    = typeof req.query.month    === 'string' ? req.query.month.trim()    : null;
 
   if (!masterID) return res.status(400).json({ error: 'Missing masterID' });
   if (!platform) return res.status(400).json({ error: 'Missing platform' });
@@ -20,12 +19,18 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: `Invalid platform. Must be one of: ${VALID_PLATFORMS.join(', ')}` });
   }
 
+  const now = new Date();
+  const defaultMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
+  const monthParam = (typeof req.query.month === 'string' && req.query.month.trim())
+    ? req.query.month.trim()
+    : defaultMonth;
+
   const params = new URLSearchParams({
     id: masterID,
+    month: monthParam,
     type: 'posts',
     includeProfile: 'false'
   });
-  if (month) params.set('month', month);
 
   const apiUrl = `https://social-media-master.p.rapidapi.com/universal-profile-posts?${params.toString()}`;
 
