@@ -399,7 +399,7 @@ function getMasterID(platform, handle) {
   }
   const list = platformRosters[platform] || [];
   const a = list.find(r => r.handle === handle);
-  return a ? (a[`${platform}_masterID`] || null) : null;
+  return a ? (a.masterID || null) : null;
 }
 
 async function togglePostsDrawer(platform, handle) {
