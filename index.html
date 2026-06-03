@@ -469,7 +469,7 @@ function renderPostsDrawer(platform, handle) {
     content = `<div class="posts-grid">${state.posts.map(p => {
       const isShorts = p.type === 'SHORTS';
       const thumbWrap = `post-thumb-wrap${isShorts ? ' shorts' : ''}`;
-      const thumb = p.postImage ? `<img class="post-thumb" src="${p.postImage}" alt="" onerror="this.style.display='none'" />` : '';
+      const thumb = p.postImage ? `<img class="post-thumb" src="/api/proxy-image?url=${encodeURIComponent(p.postImage)}" alt="" onerror="this.style.display='none'" />` : '';
       const typeTag = p.type ? `<span class="post-type-tag">${p.type}</span>` : '';
       const gradeTag = p.grade ? `<span class="post-grade-tag grade-${p.grade}">${gradeLabel(p.grade)}</span>` : '';
       const title = (p.title || '').substring(0, 60) + ((p.title||'').length > 60 ? '…' : '');
