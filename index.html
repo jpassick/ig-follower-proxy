@@ -132,6 +132,34 @@
   .picker-range-start.picker-range-end { border-radius: 4px !important; }
   .picker-today { font-weight: 700; }
   .picker-hint { font-size: 11px; color: #bbb; text-align: center; padding: 6px 16px 10px; border-top: 1px solid #f5f5f5; }
+
+  /* Posts drawer */
+  .posts-btn { font-size: 11px; color: #888; cursor: pointer; padding: 3px 8px; border: 1px solid #ddd; border-radius: 6px; background: #fff; white-space: nowrap; }
+  .posts-btn:hover { background: #f5f5f5; color: #1a1a1a; border-color: #bbb; }
+  .posts-btn.open { color: #1a1a1a; border-color: #999; background: #f5f5f5; }
+  .posts-btn.loading { color: #aaa; cursor: default; }
+  .posts-drawer-row td { padding: 0 0 10px 0; border-bottom: 1px solid #eee; }
+  .posts-drawer { background: #f9f9f7; border: 1px solid #eee; border-radius: 10px; padding: 12px 14px; }
+  .posts-drawer-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .posts-drawer-label { font-size: 11px; color: #888; font-weight: 500; }
+  .posts-drawer-period { font-size: 11px; color: #bbb; margin-left: 6px; }
+  .posts-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .post-card { background: #fff; border: 1px solid #eee; border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit; display: block; }
+  .post-card:hover .post-thumb { opacity: 0.88; }
+  .post-thumb-wrap { position: relative; width: 100%; padding-top: 56.25%; background: #f0f0f0; overflow: hidden; }
+  .post-thumb-wrap.shorts { padding-top: 100%; }
+  .post-thumb { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 0.15s; }
+  .post-type-tag { position: absolute; top: 5px; left: 5px; font-size: 9px; padding: 1px 5px; border-radius: 3px; background: rgba(0,0,0,0.6); color: #fff; font-weight: 600; letter-spacing: 0.03em; }
+  .post-grade-tag { position: absolute; top: 5px; right: 5px; font-size: 9px; padding: 2px 5px; border-radius: 3px; font-weight: 700; }
+  .grade-a_plus { background: #e8f5e9; color: #2e7d32; }
+  .grade-a { background: #e8f5e9; color: #388e3c; }
+  .grade-b { background: #fff8e1; color: #f57f17; }
+  .grade-c { background: #fff3e0; color: #e65100; }
+  .grade-d { background: #fce4ec; color: #c62828; }
+  .post-info { padding: 6px 8px 8px; }
+  .post-title { font-size: 11px; font-weight: 500; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+  .post-stats { display: flex; gap: 8px; font-size: 10px; color: #aaa; flex-wrap: wrap; }
+  .post-stat { white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -213,11 +241,11 @@
         <tr>
           <th style="width:4%">#</th>
           <th style="width:4%"></th>
-          <th style="width:26%" onclick="sortBy('handle')">Handle <span class="sort-arrow" id="sort-handle">↕</span></th>
-          <th style="width:16%" onclick="sortBy('followers')">Followers <span class="sort-arrow" id="sort-followers">↕</span></th>
-          <th style="width:22%" onclick="sortBy('growth')">Follower Growth <span class="sort-arrow active" id="sort-growth">▼</span></th>
-          <th style="width:22%" onclick="sortBy('pct')">Follower Growth % <span class="sort-arrow" id="sort-pct">↕</span></th>
-          <th style="width:6%"></th>
+          <th style="width:24%" onclick="sortBy('handle')">Handle <span class="sort-arrow" id="sort-handle">↕</span></th>
+          <th style="width:15%" onclick="sortBy('followers')">Followers <span class="sort-arrow" id="sort-followers">↕</span></th>
+          <th style="width:20%" onclick="sortBy('growth')">Follower Growth <span class="sort-arrow active" id="sort-growth">▼</span></th>
+          <th style="width:20%" onclick="sortBy('pct')">Follower Growth % <span class="sort-arrow" id="sort-pct">↕</span></th>
+          <th style="width:13%"></th>
         </tr>
       </thead>
       <tbody id="roster-body"></tbody>
@@ -322,7 +350,7 @@ const PLATFORMS = {
   youtube:   { label: 'YouTube',   profileUrl: h => `https://www.youtube.com/@${h}`,   isMain: false, prefix: 'youtube',  placeholder: 'YouTube handle, e.g. rodwaveofficial' },
   twitter:   { label: 'X',         profileUrl: h => `https://x.com/${h}`,              isMain: false, prefix: 'twitter',  placeholder: 'X handle, e.g. lildurk' },
   facebook:  { label: 'Facebook',  profileUrl: h => `https://www.facebook.com/${h}`,   isMain: false, prefix: 'facebook', placeholder: 'Facebook URL or handle, e.g. facebook.com/rodwave' }
-   };
+};
 const SOCIAL_PLATFORMS = ['tiktok', 'youtube', 'twitter', 'facebook'];
 
 let roster = [], snapshots = [], currentSort = { field: 'growth', dir: 'desc' }, isAdmin = false, isAnr = false;
@@ -358,6 +386,129 @@ let anrStarred = new Set(JSON.parse(localStorage.getItem(STARRED_ANR_KEY) || '[]
 let anrRoster = [], anrSnapshots = [], anrCurrentSort = { field: 'pct', dir: 'desc' };
 let currentAnrRosterTab = 'all';
 let weekWindows = [], currentWeekIdx = -1;
+
+// Posts drawer state: { [platform_handle]: { open, loading, posts, period, error } }
+const postsDrawerState = {};
+
+function postsKey(platform, handle) { return `${platform}::${handle}`; }
+
+function getMasterID(platform, handle) {
+  if (platform === 'instagram') {
+    const a = roster.find(r => r.handle === handle);
+    return a ? (a.instagram_masterID || null) : null;
+  }
+  const list = platformRosters[platform] || [];
+  const a = list.find(r => r.handle === handle);
+  return a ? (a[`${platform}_masterID`] || null) : null;
+}
+
+async function togglePostsDrawer(platform, handle) {
+  const key = postsKey(platform, handle);
+  const state = postsDrawerState[key] || { open: false, loading: false, posts: null, period: null, error: null };
+
+  if (state.open) {
+    state.open = false;
+    postsDrawerState[key] = state;
+    renderRoster();
+    return;
+  }
+
+  state.open = true;
+  postsDrawerState[key] = state;
+
+  if (!state.posts && !state.loading) {
+    state.loading = true;
+    renderRoster();
+    try {
+      const masterID = getMasterID(platform, handle);
+      if (!masterID) throw new Error('No masterID stored for this artist on ' + platform);
+      const res = await fetch(`/api/social-posts?masterID=${encodeURIComponent(masterID)}&platform=${platform}`);
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to load posts');
+      state.posts = data.posts || [];
+      state.period = data.period || null;
+      state.error = null;
+      // If current month returned empty, silently try previous month
+      if (state.posts.length === 0) {
+        const now = new Date();
+        const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const prevMonthStr = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2,'0')}-01`;
+        const res2 = await fetch(`/api/social-posts?masterID=${encodeURIComponent(masterID)}&platform=${platform}&month=${prevMonthStr}`);
+        const data2 = await res2.json();
+        if (res2.ok && data2.ok && data2.posts && data2.posts.length > 0) {
+          state.posts = data2.posts;
+          state.period = data2.period || null;
+        }
+      }
+    } catch(e) {
+      state.error = e.message;
+      state.posts = [];
+    }
+    state.loading = false;
+  }
+
+  postsDrawerState[key] = state;
+  renderRoster();
+}
+
+function renderPostsDrawer(platform, handle) {
+  const key = postsKey(platform, handle);
+  const state = postsDrawerState[key];
+  if (!state || !state.open) return '';
+
+  let content;
+  if (state.loading) {
+    content = `<span style="font-size:12px;color:#aaa;">Loading posts...</span>`;
+  } else if (state.error) {
+    content = `<span style="font-size:12px;color:#c0392b;">${state.error}</span>`;
+  } else if (!state.posts || state.posts.length === 0) {
+    content = `<span style="font-size:12px;color:#aaa;">No posts found for this period.</span>`;
+  } else {
+    const gradeLabel = g => ({ a_plus:'A+', a:'A', b:'B', c:'C', d:'D' }[g] || (g||'').toUpperCase());
+    const fmtNum = n => { if(n==null)return'—'; if(n>=1000000)return(n/1000000).toFixed(1)+'M'; if(n>=1000)return(n/1000).toFixed(0)+'K'; return String(n); };
+    content = `<div class="posts-grid">${state.posts.map(p => {
+      const isShorts = p.type === 'SHORTS';
+      const thumbWrap = `post-thumb-wrap${isShorts ? ' shorts' : ''}`;
+      const thumb = p.postImage ? `<img class="post-thumb" src="${p.postImage}" alt="" onerror="this.style.display='none'" />` : '';
+      const typeTag = p.type ? `<span class="post-type-tag">${p.type}</span>` : '';
+      const gradeTag = p.grade ? `<span class="post-grade-tag grade-${p.grade}">${gradeLabel(p.grade)}</span>` : '';
+      const title = (p.title || '').substring(0, 60) + ((p.title||'').length > 60 ? '…' : '');
+      const statsHtml = [
+        p.views   ? `<span class="post-stat">▶ ${fmtNum(p.views)}</span>` : '',
+        p.likes   ? `<span class="post-stat">♥ ${fmtNum(p.likes)}</span>` : '',
+        p.comments? `<span class="post-stat">💬 ${fmtNum(p.comments)}</span>` : ''
+      ].filter(Boolean).join('');
+      return `<a href="${p.postUrl||'#'}" target="_blank" class="post-card">
+        <div class="${thumbWrap}">${thumb}${typeTag}${gradeTag}</div>
+        <div class="post-info">
+          <div class="post-title">${title}</div>
+          <div class="post-stats">${statsHtml}</div>
+        </div>
+      </a>`;
+    }).join('')}</div>`;
+  }
+
+  const periodLabel = state.period ? `<span class="posts-drawer-period">${state.period}</span>` : '';
+  return `<tr class="posts-drawer-row"><td colspan="7">
+    <div class="posts-drawer">
+      <div class="posts-drawer-header">
+        <span class="posts-drawer-label">Recent posts ${periodLabel}</span>
+      </div>
+      ${content}
+    </div>
+  </td></tr>`;
+}
+
+function renderPostsBtn(platform, handle) {
+  const masterID = getMasterID(platform, handle);
+  if (!masterID) return '';
+  const key = postsKey(platform, handle);
+  const state = postsDrawerState[key];
+  const isOpen = state && state.open;
+  const isLoading = state && state.loading;
+  if (isLoading) return `<button class="posts-btn loading" disabled>loading...</button>`;
+  return `<button class="posts-btn${isOpen ? ' open' : ''}" onclick="togglePostsDrawer('${platform}','${handle}')">${isOpen ? '▲ posts' : '▾ posts'}</button>`;
+}
 
 function presetToRange(key) {
   const now = Date.now();
@@ -922,7 +1073,8 @@ function renderInstagramRoster(){
   const isMyRoster=currentRosterTab==='my',sorted=getSortedRoster(isMyRoster),cols=isAdmin?7:6;
   if(!roster.length){tbody.innerHTML=`<tr><td colspan="${cols}" class="muted" style="padding:12px 0;font-size:13px;">No handles added yet</td></tr>`;return;}
   if(isMyRoster&&sorted.length===0){tbody.innerHTML=`<tr><td colspan="${cols}" style="padding:12px 0;font-size:13px;color:#aaa;">No starred artists yet — click ☆ next to any artist to add them here.</td></tr>`;return;}
-  tbody.innerHTML=sorted.map((r,rankIdx)=>{
+  let html = '';
+  sorted.forEach((r,rankIdx)=>{
     const i=r._origIndex;
     const displayFollowers=r._cur??r.followers;
     const fc=r.status==='loading'?'<span class="muted">fetching...</span>'
@@ -932,9 +1084,13 @@ function renderInstagramRoster(){
     const isStarred=starred.has(r.handle);
     const picUrl=r.profilePic?proxyUrl(r.profilePic):'';
     const avatarHtml=picUrl?`<img src="${picUrl}" class="avatar" alt="" onerror="this.outerHTML='<span class=\\'avatar-placeholder\\'></span>'" />`:`<span class="avatar-placeholder"></span>`;
-    const removeBtn=isAdmin?`<td style="text-align:right"><button class="danger" onclick="removeHandle(${i})">✕</button></td>`:'';
-    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a>${renderFanBadge(r,'instagram')}</div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${removeBtn}</tr>`;
-  }).join('');
+    const removeBtn=isAdmin?`<button class="danger" onclick="removeHandle(${i})">✕</button>`:'';
+    const postsBtn = renderPostsBtn('instagram', r.handle);
+    const actionCell = `<td style="text-align:right;white-space:nowrap;">${postsBtn}${isAdmin ? ' '+removeBtn : ''}</td>`;
+    html += `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${igUrl}" target="_blank">@${r.handle}</a>${renderFanBadge(r,'instagram')}</div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${actionCell}</tr>`;
+    html += renderPostsDrawer('instagram', r.handle);
+  });
+  tbody.innerHTML = html;
 }
 
 function renderSocialRoster(platform){
@@ -977,7 +1133,8 @@ function renderSocialRoster(platform){
     return 0;
   });
 
-  tbody.innerHTML = sorted.map((r, rankIdx) => {
+  let html = '';
+  sorted.forEach((r, rankIdx) => {
     const isStarred = starSet.has(r.handle);
     const socialUrl = cfg.profileUrl(r.handle);
     const fc = r.status === 'loading'
@@ -989,9 +1146,13 @@ function renderSocialRoster(platform){
           : `<span class="pill-err">error</span>${isAdmin ? ` <button style="font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid #ddd;background:#fff;cursor:pointer;" onclick="retrySocialHandle('${platform}','${r.handle}')">↻</button>` : ''}`;
     const picUrl = r.profilePic ? proxyUrl(r.profilePic) : '';
     const avatarHtml = picUrl ? `<img src="${picUrl}" class="avatar" alt="" onerror="this.outerHTML='<span class=\\'avatar-placeholder\\'></span>'" />` : `<span class="avatar-placeholder"></span>`;
-    const removeBtn = isAdmin ? `<td style="text-align:right"><button class="danger" onclick="removeSocialHandle('${platform}','${r.handle}')">✕</button></td>` : '';
-    return `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${socialUrl}" target="_blank">@${r.handle}</a>${renderFanBadge(r, platform)}</div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${removeBtn}</tr>`;
-  }).join('');
+    const removeBtn = isAdmin ? `<button class="danger" onclick="removeSocialHandle('${platform}','${r.handle}')">✕</button>` : '';
+    const postsBtn = renderPostsBtn(platform, r.handle);
+    const actionCell = `<td style="text-align:right;white-space:nowrap;">${postsBtn}${isAdmin ? ' '+removeBtn : ''}</td>`;
+    html += `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${socialUrl}" target="_blank">@${r.handle}</a>${renderFanBadge(r, platform)}</div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${actionCell}</tr>`;
+    html += renderPostsDrawer(platform, r.handle);
+  });
+  tbody.innerHTML = html;
 }
 
 function renderFanBadge(r, platform = 'instagram') {
