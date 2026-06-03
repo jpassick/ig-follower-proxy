@@ -10,6 +10,7 @@ export default async function handler(req, res) {
 
   const masterID = typeof req.query.masterID === 'string' ? req.query.masterID.trim() : null;
   const platform = typeof req.query.platform === 'string' ? req.query.platform.trim().toLowerCase() : null;
+  const month    = typeof req.query.month    === 'string' ? req.query.month.trim()    : null;
 
   if (!masterID) return res.status(400).json({ error: 'Missing masterID' });
   if (!platform) return res.status(400).json({ error: 'Missing platform' });
@@ -19,7 +20,14 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: `Invalid platform. Must be one of: ${VALID_PLATFORMS.join(', ')}` });
   }
 
-  const apiUrl = `https://social-media-master.p.rapidapi.com/universal-posts?id=${encodeURIComponent(masterID)}`;
+  const params = new URLSearchParams({
+    id: masterID,
+    type: 'posts',
+    includeProfile: 'false'
+  });
+  if (month) params.set('month', month);
+
+  const apiUrl = `https://social-media-master.p.rapidapi.com/universal-profile-posts?${params.toString()}`;
 
   let raw;
   try {
@@ -39,7 +47,7 @@ export default async function handler(req, res) {
 
   const posts = rawPosts.slice(0, 8).map(p => {
     const d = p.postDetails || {};
-    const s = p.postStats || {};
+    const s = p.postStats   || {};
     const fullText = typeof d.text === 'string' ? d.text : '';
     const title = fullText.split('\n')[0].trim() || d.postID || '';
     return {
