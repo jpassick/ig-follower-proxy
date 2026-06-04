@@ -2,9 +2,9 @@
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 const KV_URL = process.env.KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN;
-const ANR_SNAPSHOTS_KEY = 'anr-snapshots';
-const ANR_LAST_REFRESHED_KEY = 'anr-last-refreshed';
 const BATCH_SIZE = 70;
+const SNAPSHOTS_PER_CHUNK = 15;
+const MAX_TOTAL_SNAPSHOTS = 1095;
 
 async function kvGet(key) {
   const r = await fetch(`${KV_URL}/get/${key}`, {
@@ -32,6 +32,13 @@ async function kvSet(key, value) {
     const text = await r.text();
     throw new Error(`kvSet failed for key ${key}: ${r.status} ${text}`);
   }
+}
+
+async function kvDel(key) {
+  await fetch(`${KV_URL}/del/${key}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${KV_TOKEN}` }
+  });
 }
 
 async function fetchFollowerCount(handle) {
@@ -65,7 +72,6 @@ async function loadFullRoster() {
 
 async function saveFullRoster(roster) {
   const CHUNK_SIZE = 500;
-
   const existingMeta = await kvGet('anr-roster:meta');
   const existingTotal = existingMeta?.total || 0;
 
@@ -88,10 +94,7 @@ async function saveFullRoster(roster) {
   if (existingMeta && existingMeta.chunks > chunks.length) {
     await Promise.all(
       Array.from({ length: existingMeta.chunks - chunks.length }, (_, i) =>
-        fetch(`${KV_URL}/del/anr-roster:chunk:${chunks.length + i}`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${KV_TOKEN}` }
-        })
+        kvDel(`anr-roster:chunk:${chunks.length + i}`)
       )
     );
   }
@@ -99,6 +102,41 @@ async function saveFullRoster(roster) {
   await Promise.all(chunks.map((chunk, i) => kvSet(`anr-roster:chunk:${i}`, chunk)));
   await kvSet('anr-roster:meta', { chunks: chunks.length, total: roster.length });
   console.log(`saveFullRoster: wrote ${roster.length} artists in ${chunks.length} chunks`);
+}
+
+async function loadChunkedSnapshots() {
+  const meta = await kvGet('anr-snapshots:meta');
+  if (meta && meta.chunks) {
+    const chunks = await Promise.all(
+      Array.from({ length: meta.chunks }, (_, i) => kvGet(`anr-snapshots:chunk:${i}`))
+    );
+    return chunks.map(c => (Array.isArray(c) ? c : [])).flat().filter(Boolean);
+  }
+  // Fall back to legacy single key (pre-migration)
+  const legacy = await kvGet('anr-snapshots');
+  return Array.isArray(legacy) ? legacy : [];
+}
+
+async function saveChunkedSnapshots(snapshots) {
+  const existingMeta = await kvGet('anr-snapshots:meta');
+
+  const chunks = [];
+  for (let i = 0; i < snapshots.length; i += SNAPSHOTS_PER_CHUNK) {
+    chunks.push(snapshots.slice(i, i + SNAPSHOTS_PER_CHUNK));
+  }
+
+  // Delete orphaned chunks if new chunk count is smaller
+  if (existingMeta && existingMeta.chunks > chunks.length) {
+    await Promise.all(
+      Array.from({ length: existingMeta.chunks - chunks.length }, (_, i) =>
+        kvDel(`anr-snapshots:chunk:${chunks.length + i}`)
+      )
+    );
+  }
+
+  await Promise.all(chunks.map((chunk, i) => kvSet(`anr-snapshots:chunk:${i}`, chunk)));
+  await kvSet('anr-snapshots:meta', { chunks: chunks.length, total: snapshots.length });
+  console.log(`saveChunkedSnapshots: wrote ${snapshots.length} snapshots in ${chunks.length} chunks`);
 }
 
 export default async function handler(req, res) {
@@ -117,7 +155,6 @@ export default async function handler(req, res) {
     const now = Date.now();
     const TWELVE_HOURS = 12 * 60 * 60 * 1000;
 
-    // Identify stale artists
     const staleArtists = roster.filter(a => !a.lastUpdated || (now - a.lastUpdated > TWELVE_HOURS));
     const staleCount = staleArtists.length;
 
@@ -126,7 +163,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: 'All artists already refreshed today.' });
     }
 
-    // Sort all artists oldest-first, take the top BATCH_SIZE
     const sortedForUpdate = [...roster].sort((a, b) => {
       const timeA = a.lastUpdated || 0;
       const timeB = b.lastUpdated || 0;
@@ -141,7 +177,6 @@ export default async function handler(req, res) {
     const batchStart = Date.now();
 
     for (const artist of batch) {
-      // Stop if we're approaching the 300s limit
       if (Date.now() - batchStart > 240000) {
         console.log('Approaching time limit, stopping early to save progress');
         break;
@@ -151,20 +186,16 @@ export default async function handler(req, res) {
       }
       try {
         const { followers, profilePic } = await fetchFollowerCount(artist.handle);
-
-        // Update in place on the main roster array
         const target = roster.find(a => a.handle === artist.handle);
         if (target) {
           target.followers = followers;
           if (profilePic) target.profilePic = profilePic;
           target.lastUpdated = now;
         }
-
         results.push({ handle: artist.handle, followers });
       } catch (err) {
         errors.push({ handle: artist.handle, error: err.message });
         console.error(`Error refreshing A&R ${artist.handle}:`, err.message);
-        // If account is gone (404/403), still mark as updated so it rotates out
         if (err.message.includes('404') || err.message.includes('403') || err.message.includes('429') || err.message.includes('400')) {
           const target = roster.find(a => a.handle === artist.handle);
           if (target) target.lastUpdated = now;
@@ -174,14 +205,12 @@ export default async function handler(req, res) {
     }
 
     await saveFullRoster(roster);
-    await kvSet(ANR_LAST_REFRESHED_KEY, now);
+    await kvSet('anr-last-refreshed', now);
 
-    // If stale count at start of this run was <= batch size, this is the final run
     const isLastBatch = staleCount <= BATCH_SIZE;
 
     if (isLastBatch) {
-      let snapshots = await kvGet(ANR_SNAPSHOTS_KEY);
-      if (!Array.isArray(snapshots)) snapshots = [];
+      let snapshots = await loadChunkedSnapshots();
       const dayOfWeek = new Date().getUTCDay();
       const snapshot = {
         date: new Date().toISOString(),
@@ -191,9 +220,11 @@ export default async function handler(req, res) {
           .map(a => ({ handle: a.handle, followers: a.followers })),
       };
       snapshots.push(snapshot);
-      if(snapshots.length>1095) snapshots.splice(0,snapshots.length-1095);
-      await kvSet(ANR_SNAPSHOTS_KEY, snapshots);
-      console.log('A&R cycle complete (LAST BATCH) — snapshot saved');
+      if (snapshots.length > MAX_TOTAL_SNAPSHOTS) {
+        snapshots.splice(0, snapshots.length - MAX_TOTAL_SNAPSHOTS);
+      }
+      await saveChunkedSnapshots(snapshots);
+      console.log(`A&R cycle complete (LAST BATCH) — snapshot saved. Total snapshots: ${snapshots.length}`);
     } else {
       console.log(`A&R batch complete — ${results.length} refreshed, ${errors.length} errors.`);
     }
