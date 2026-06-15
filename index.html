@@ -1464,7 +1464,7 @@ async function refreshSocialPlatform(platform){
   for (let idx = 0; idx < targets.length; idx++) {
     const t = targets[idx];
     try {
-      const res = await fetch('/api/refresh-social-entry', {
+      const res = await fetch('/api/social-followers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: adminPw, platform, handle: t.handle })
