@@ -1,20 +1,24 @@
 const PLATFORMS = {
   tiktok: {
+    redisKey: 'tiktok-roster',
     handleEndpoint: '/tiktok-user-account',
     profileUrl: handle => `https://www.tiktok.com/@${handle}`,
     wrapperKey: 'profile'
   },
   youtube: {
+    redisKey: 'youtube-roster',
     handleEndpoint: '/youtube-channel-details',
     profileUrl: handle => `https://www.youtube.com/@${handle}`,
     wrapperKey: 'channel'
   },
   twitter: {
+    redisKey: 'twitter-roster',
     handleEndpoint: '/twitter-user-account',
     profileUrl: handle => `https://x.com/${handle}`,
     wrapperKey: 'profile'
   },
   facebook: {
+    redisKey: 'facebook-roster',
     handleEndpoint: '/facebook-user-account',
     profileUrl: handle => `https://www.facebook.com/${handle}`,
     wrapperKey: 'profile'
@@ -56,45 +60,51 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'YOUTUBE_API_KEY not configured' });
   }
 
-  const igHandle = typeof body?.handle === 'string' ? body.handle.trim().toLowerCase() : null;
-  if (!igHandle) return res.status(400).json({ error: 'Missing handle parameter (artist IG handle)' });
+  const handle = typeof body?.handle === 'string' ? body.handle.trim().replace(/^@/, '').toLowerCase() : null;
+  if (!handle) return res.status(400).json({ error: 'Missing handle parameter' });
 
-  const r = await fetch(`${url}/get/roster`, { headers: { Authorization: `Bearer ${token}` } });
-  const data = await r.json();
-
-  let roster = [];
-  if (data.result) {
-    let val = data.result;
+  // Read from platform-specific roster key
+  async function kvGet(key) {
+    const r = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    let val = j.result;
     while (typeof val === 'string') {
       try { val = JSON.parse(val); } catch(e) { break; }
     }
     if (Array.isArray(val) && val.length === 1 && typeof val[0] === 'string') {
       try { val = JSON.parse(val[0]); } catch(e) {}
     }
-    if (Array.isArray(val)) roster = val;
+    while (typeof val === 'string') {
+      try { val = JSON.parse(val); } catch(e) { break; }
+    }
+    return val;
   }
 
-  if (roster.length === 0) return res.status(404).json({ error: 'Roster is empty or could not be read' });
-
-  const idx = roster.findIndex(a => a && typeof a.handle === 'string' && a.handle.toLowerCase() === igHandle);
-  if (idx === -1) return res.status(404).json({ error: `Artist not found in roster: ${igHandle}` });
-
-  const fHandle      = `${platform}_handle`;
-  const fMasterID    = `${platform}_masterID`;
-  const fNickname    = `${platform}_nickname`;
-  const fProfilePic  = `${platform}_profilePic`;
-  const fFollowers   = `${platform}_followers`;
-  const fStatus      = `${platform}_status`;
-  const fLastUpdated = `${platform}_lastUpdated`;
-
-  const socialHandle = roster[idx][fHandle];
-  const masterID = roster[idx][fMasterID] || null;
-
-  if (!socialHandle) {
-    return res.status(400).json({
-      error: `Artist ${igHandle} has no ${fHandle} set. Use update-social-handle (or update-tiktok-handle for TikTok) to add one first.`
+  async function kvSet(key, value) {
+    const r = await fetch(`${url}/set/${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([JSON.stringify(value)])
     });
+    return r.ok;
   }
+
+  const roster = (await kvGet(config.redisKey)) || [];
+  if (!Array.isArray(roster) || roster.length === 0) {
+    return res.status(404).json({ error: `${platform} roster is empty or could not be read` });
+  }
+
+  const idx = roster.findIndex(a => a && typeof a.handle === 'string' && a.handle.toLowerCase() === handle);
+  if (idx === -1) {
+    return res.status(404).json({ error: `Artist not found in ${platform} roster: ${handle}` });
+  }
+
+  const entry = roster[idx];
+  const masterID = entry.masterID || null;
+  const socialHandle = entry.handle;
 
   const smmHeaders = {
     'x-rapidapi-host': 'social-media-master.p.rapidapi.com',
@@ -115,11 +125,8 @@ export default async function handler(req, res) {
     }
   }
 
-  // YouTube Data API v3 fetcher (channel-ID aware). One call returns subscriber count
-  // + channel name + avatar. If the stored handle is a channel ID (UC...), look up by
-  // id= — that works for channels with no modern @handle (e.g. PARTYNEXTDOOR).
-  async function fetchYouTubeData(handle) {
-    const cleanHandle = handle.replace(/^@+/, '');
+  async function fetchYouTubeData(h) {
+    const cleanHandle = h.replace(/^@+/, '');
     const isChannelId = /^UC[\w-]{22}$/.test(cleanHandle);
     const lookupParam = isChannelId
       ? `id=${encodeURIComponent(cleanHandle)}`
@@ -139,16 +146,11 @@ export default async function handler(req, res) {
                   || snippet?.thumbnails?.medium?.url
                   || snippet?.thumbnails?.high?.url
                   || null;
-      if (stats.hiddenSubscriberCount === true) {
-        return { ok: false, status: 'hidden_count', nickname, avatar };
-      }
+      if (stats.hiddenSubscriberCount === true) return { ok: false, status: 'hidden_count', nickname, avatar };
       const subStr = stats.subscriberCount;
       const followers = typeof subStr === 'string' ? parseInt(subStr, 10)
-                      : typeof subStr === 'number' ? subStr
-                      : null;
-      if (followers === null || Number.isNaN(followers) || followers < 0) {
-        return { ok: false, status: 'invalid_count', nickname, avatar };
-      }
+                      : typeof subStr === 'number' ? subStr : null;
+      if (followers === null || Number.isNaN(followers) || followers < 0) return { ok: false, status: 'invalid_count', nickname, avatar };
       return { ok: true, followers, nickname, avatar };
     } catch (err) {
       return { ok: false, status: `fetch_error: ${err.message}` };
@@ -159,11 +161,10 @@ export default async function handler(req, res) {
   let fetchError = null;
 
   if (platform === 'youtube') {
-    // -------- YouTube Data API v3 path --------
     const yt = await fetchYouTubeData(socialHandle);
     if (yt.ok) {
       fetchedData = {
-        masterID: masterID || null,   // legacy SMM field — leave untouched
+        masterID: masterID || null,
         followers: yt.followers,
         nickname: yt.nickname ?? socialHandle,
         avatar_url: yt.avatar ?? null,
@@ -173,27 +174,19 @@ export default async function handler(req, res) {
       fetchError = `YouTube API: ${yt.status}`;
     }
   } else {
-    // -------- SMM path (tiktok / twitter / facebook) --------
     const useFastPath = !!masterID;
     const profileApiUrl = useFastPath
       ? `https://social-media-master.p.rapidapi.com/universal-profile-id?id=${encodeURIComponent(masterID)}`
       : `https://social-media-master.p.rapidapi.com${config.handleEndpoint}?url=${encodeURIComponent(config.profileUrl(socialHandle))}`;
 
-    // For TikTok specifically: also pull from /tiktok-account-stats for the more accurate primary
-    // follower count, mirroring cron-tiktok-snapshot-daily.js. When masterID is already known,
-    // run both calls in parallel.
     let profileResp;
     let tiktokStatsResp = null;
 
     if (platform === 'tiktok' && useFastPath) {
       const statsApiUrl = `https://social-media-master.p.rapidapi.com/tiktok-account-stats?id=${encodeURIComponent(masterID)}&days=1`;
-      [profileResp, tiktokStatsResp] = await Promise.all([
-        smmGet(profileApiUrl),
-        smmGet(statsApiUrl)
-      ]);
+      [profileResp, tiktokStatsResp] = await Promise.all([smmGet(profileApiUrl), smmGet(statsApiUrl)]);
     } else {
       profileResp = await smmGet(profileApiUrl);
-      // First-time TikTok refresh (no stored masterID): discover masterID, then fetch account-stats.
       if (platform === 'tiktok' && profileResp.ok) {
         const discoveredMasterID = profileResp.data?.profile?.masterID;
         if (discoveredMasterID) {
@@ -210,7 +203,6 @@ export default async function handler(req, res) {
       if (wrapper && stats) {
         let chosenFollowers = stats.followersCount ?? 0;
         let followersSource = 'profile-details';
-
         if (platform === 'tiktok' && tiktokStatsResp?.ok) {
           const sumF = tiktokStatsResp.data?.summaryStats?.followers;
           if (typeof sumF === 'number' && sumF > 0) {
@@ -218,7 +210,6 @@ export default async function handler(req, res) {
             followersSource = 'account-stats';
           }
         }
-
         fetchedData = {
           masterID: wrapper.masterID || masterID || null,
           followers: chosenFollowers,
@@ -238,36 +229,28 @@ export default async function handler(req, res) {
   if (fetchedData) {
     roster[idx] = {
       ...roster[idx],
-      [fFollowers]: fetchedData.followers,
-      [fNickname]: fetchedData.nickname,
-      [fProfilePic]: fetchedData.avatar_url,
-      [fStatus]: 'ok',
-      [fLastUpdated]: now,
-      [fMasterID]: fetchedData.masterID
+      masterID: fetchedData.masterID,
+      nickname: fetchedData.nickname,
+      profilePic: fetchedData.avatar_url,
+      followers: fetchedData.followers,
+      status: 'ok',
+      updatedAt: now
     };
   } else {
     roster[idx] = {
       ...roster[idx],
-      [fStatus]: 'error',
-      [fLastUpdated]: now
+      status: 'error',
+      updatedAt: now
     };
   }
 
-  const clean = roster.filter(a => a && typeof a.handle === 'string' && a.handle.length > 0);
-  const writeR = await fetch(`${url}/set/roster`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify([JSON.stringify(clean)])
-  });
-
-  if (!writeR.ok) {
-    return res.status(500).json({ error: 'Failed to write roster', status: writeR.status });
-  }
+  const ok = await kvSet(config.redisKey, roster);
+  if (!ok) return res.status(500).json({ error: 'Failed to write roster' });
 
   return res.status(200).json({
     ok: !!fetchedData,
     platform,
-    artist: clean[idx],
+    entry: roster[idx],
     followers_source: fetchedData?.followers_source ?? null,
     fetch_error: fetchError
   });
