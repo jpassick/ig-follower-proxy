@@ -75,6 +75,8 @@
   .down { color: #c0392b; font-size: 12px; }
   .muted { color: #aaa; }
   .pill-err { background: #fdf0ee; color: #c0392b; font-size: 11px; padding: 2px 8px; border-radius: 20px; }
+  .platform-note { font-size: 11px; color: #aaa; margin: -0.4rem 0 0.75rem; line-height: 1.45; display: none; }
+  .stale-pill { font-size: 9px; background: #fdf0ee; color: #c0392b; border-radius: 10px; padding: 2px 7px; letter-spacing: 0.05em; font-weight: 600; text-transform: uppercase; margin-left: 6px; cursor: help; }
   .report-box { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
   .report-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
   .report-title { font-size: 14px; font-weight: 600; }
@@ -201,6 +203,7 @@
     </div>
     <div class="progress-bar" id="progress-bar"><div class="progress-bar-fill" id="progress-fill"></div></div>
     <p class="last-updated" id="last-updated"></p>
+    <p class="platform-note" id="platform-note"></p>
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
       <div class="roster-tabs">
         <div class="roster-tab-wrap">
@@ -352,6 +355,18 @@ const PLATFORMS = {
   facebook:  { label: 'Facebook',  profileUrl: h => `https://www.facebook.com/${h}`,   isMain: false, prefix: 'facebook', placeholder: 'Facebook URL or handle, e.g. facebook.com/rodwave' }
 };
 const SOCIAL_PLATFORMS = ['tiktok', 'youtube', 'twitter', 'facebook'];
+const PLATFORM_NOTES = {
+  youtube: "YouTube only publishes rounded subscriber counts (e.g. 7.33M moves in steps of 10,000; 36.2K in steps of 100). A growth of 0 means the rounded number didn't change — not necessarily that the channel didn't grow.",
+  tiktok: "TikTok follower counts are rounded above 10K (to the nearest 100, or the nearest 100K above 1M). Small changes may show as 0 growth."
+};
+function updatePlatformNote() {
+  const el = document.getElementById('platform-note');
+  if (!el) return;
+  const note = PLATFORM_NOTES[currentPlatform];
+  el.textContent = note || '';
+  el.style.display = note ? 'block' : 'none';
+}
+function isSocialFailed(r) { return !!(r.status && r.status !== 'ok' && r.status !== 'loading' && r.status !== 'pending'); }
 
 let roster = [], snapshots = [], currentSort = { field: 'growth', dir: 'desc' }, isAdmin = false, isAnr = false;
 let currentRosterTab = 'all';
@@ -909,6 +924,7 @@ function updatePlatformUI() {
     refreshBtn.style.display = isAdmin ? 'inline-block' : 'none';
     refreshBtn.textContent = `↻ Refresh ${PLATFORMS[currentPlatform].label}`;
   }
+  updatePlatformNote();
 }
 
 function updateLastUpdated() {
@@ -1038,8 +1054,9 @@ function getSortedSocialRoster(platform, filterStarred=false){
   list = list.map(r => {
     const pair = getSnapPairForRange(r.handle, mainRange, snapList);
     const cur = pair.cur ?? r.followers;
-    const diff = (cur != null && pair.prev != null) ? cur - pair.prev : null;
-    const p = (cur != null && pair.prev != null) ? (cur - pair.prev) / pair.prev * 100 : null;
+    const failed = isSocialFailed(r);
+    const diff = (!failed && cur != null && pair.prev != null) ? cur - pair.prev : null;
+    const p = (diff != null && pair.prev > 0) ? diff / pair.prev * 100 : null;
     return { ...r, _cur: cur, _diff: diff, _pct: p };
   });
   return list.sort((a, b) => {
@@ -1129,8 +1146,9 @@ function renderSocialRoster(platform){
   items = items.map(r => {
     const pair = getSnapPairForRange(r.handle, mainRange, snapList);
     const cur = pair.cur ?? r.followers;
-    const diff = (cur != null && pair.prev != null) ? cur - pair.prev : null;
-    const p = (cur != null && pair.prev != null) ? (cur - pair.prev) / pair.prev * 100 : null;
+    const failed = isSocialFailed(r);
+    const diff = (!failed && cur != null && pair.prev != null) ? cur - pair.prev : null;
+    const p = (diff != null && pair.prev > 0) ? diff / pair.prev * 100 : null;
     return { ...r, _cur: cur, _diff: diff, _pct: p };
   });
 
@@ -1161,7 +1179,7 @@ function renderSocialRoster(platform){
     const removeBtn = isAdmin ? `<button class="danger" onclick="removeSocialHandle('${platform}','${r.handle}')">✕</button>` : '';
     const postsBtn = renderPostsBtn(platform, r.handle);
     const actionCell = `<td style="text-align:right;white-space:nowrap;">${postsBtn}${isAdmin ? ' '+removeBtn : ''}</td>`;
-    html += `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${socialUrl}" target="_blank">@${r.handle}</a>${renderFanBadge(r, platform)}</div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${actionCell}</tr>`;
+    html += `<tr><td><span class="rank">${rankIdx+1}</span></td><td><button class="star-btn ${isStarred?'starred':''}" onclick="toggleStar('${r.handle}')">${isStarred?'★':'☆'}</button></td><td><div class="handle-cell">${avatarHtml}<a class="handle-link" href="${socialUrl}" target="_blank">@${r.handle}</a>${renderFanBadge(r, platform)}${(isSocialFailed(r) && r.followers != null) ? `<span class="stale-pill" title="Latest lookup failed (${r.status}) — showing the last known count">stale</span>` : ''}</div></td><td>${fc}</td><td>${renderGrowth(r._diff)}</td><td>${renderPct(r._pct)}</td>${actionCell}</tr>`;
     html += renderPostsDrawer(platform, r.handle);
   });
   tbody.innerHTML = html;
@@ -1694,8 +1712,20 @@ function downloadReportPDF(){
 }
 
 async function sendEmailNow(){
-  const btn=event.target;btn.textContent='Sending...';btn.disabled=true;
-  try{const res=await fetch('/api/send-email',{method:'POST'});const data=await res.json();if(data.ok)alert('Email sent!');else alert('Error: '+(data.error||'Unknown'));}
+  const btn=event.target;
+  // Presets are recomputed at click time so "Last 7 Days" etc. end right now, not when the page loaded
+  let range = mainRange;
+  if (range.type === 'preset' && range.key !== 'allTime') {
+    const r = presetToRange(range.key);
+    if (r) range = { ...range, startTs: r.startTs, endTs: r.endTs };
+  }
+  if (!confirm(`Send the email update for "${range.label}" (all platforms)?`)) return;
+  btn.textContent='Sending...';btn.disabled=true;
+  try{
+    const res=await fetch('/api/send-email',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({startTs:range.startTs,endTs:range.endTs,label:range.label})});
+    const data=await res.json();
+    if(data.ok)alert(`Email sent — ${data.label} (${data.dateRange})`);else alert('Error: '+(data.error||'Unknown'));
+  }
   catch(e){alert('Failed: '+e.message);}
   btn.textContent='✉ Send email update';btn.disabled=false;
 }
