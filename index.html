@@ -701,7 +701,7 @@ function getSnapshotsForPlatform(platform) {
 }
 
 function getSnapPairForRange(handle, range, snapList) {
-  if (!snapList.length) return { cur: null, prev: null };
+  if (!snapList.length) return { cur: null, prev: null, curTs: null };
   const { startTs, endTs } = range;
   const endDay   = toStartOfDay(endTs);
   const startDay = toStartOfDay(startTs);
@@ -713,6 +713,7 @@ function getSnapPairForRange(handle, range, snapList) {
     if (snapDay <= startDay) { startSnap = snap; startSnapIdx = i; }
   }
   const curEntry = endSnap ? endSnap.data.find(d => d.handle === handle) : null;
+  const curTs = (endSnap && curEntry) ? snapTs(endSnap) : null;
   let prevEntry  = startSnap ? startSnap.data.find(d => d.handle === handle) : null;
 
   if (endSnap && startSnap && endSnap === startSnap) {
@@ -721,7 +722,7 @@ function getSnapPairForRange(handle, range, snapList) {
       const e = snapList[i].data.find(d => d.handle === handle);
       if (e) { altEntry = e; break; }
     }
-    return { cur: curEntry ? curEntry.followers : null, prev: altEntry ? altEntry.followers : null };
+    return { cur: curEntry ? curEntry.followers : null, prev: altEntry ? altEntry.followers : null, curTs };
   }
 
   if (startSnap && !prevEntry) {
@@ -732,7 +733,18 @@ function getSnapPairForRange(handle, range, snapList) {
     }
   }
 
-  return { cur: curEntry ? curEntry.followers : null, prev: prevEntry ? prevEntry.followers : null };
+  return { cur: curEntry ? curEntry.followers : null, prev: prevEntry ? prevEntry.followers : null, curTs };
+}
+
+// Prefer a freshly fetched roster value over the end-of-range snapshot when the fetch is
+// newer than that snapshot and falls inside the selected range. Past-only ranges are unaffected.
+function resolveCurrent(r, pair, range) {
+  const upd = Number(r.updatedAt);
+  const liveUsable = r.followers != null && r.status === 'ok' && upd && !isNaN(upd)
+    && toStartOfDay(upd) <= toStartOfDay(range.endTs)
+    && (pair.curTs == null || upd > pair.curTs);
+  if (liveUsable) return r.followers;
+  return pair.cur ?? r.followers;
 }
 
 function saveStarred() { localStorage.setItem(STARRED_KEYS[currentPlatform], JSON.stringify([...starredSets[currentPlatform]])); }
@@ -1001,7 +1013,7 @@ function switchAnrRosterTab(tab){
 function getSortedRoster(filterStarred=false){
   let list=[...roster].map((r,i)=>{
     const pair=getSnapPairForRange(r.handle, mainRange, snapshots);
-    const cur=pair.cur??r.followers;
+    const cur=resolveCurrent(r, pair, mainRange);
     const diff=(cur!=null&&pair.prev!=null)?cur-pair.prev:null;
     const p=(cur!=null&&pair.prev!=null)?(cur-pair.prev)/pair.prev*100:null;
     return{...r,_origIndex:i,_cur:cur,_diff:diff,_pct:p};
@@ -1045,7 +1057,7 @@ function getSortedSocialRoster(platform, filterStarred=false){
 function getSortedAnrRoster(filterStarred=false){
   let list=[...anrRoster].map((r,i)=>{
     const pair=getSnapPairForRange(r.handle, anrRange, anrSnapshots);
-    const cur=pair.cur??r.followers;
+    const cur=resolveCurrent(r, pair, anrRange);
     const diff=(cur!=null&&pair.prev!=null)?cur-pair.prev:null;
     const p=(cur!=null&&pair.prev!=null)?(cur-pair.prev)/pair.prev*100:null;
     return{...r,_origIndex:i,_cur:cur,_diff:diff,_pct:p};
@@ -1450,6 +1462,7 @@ async function refreshInstagram(){
   }
   pb.style.display='none';btn.disabled=false;btn.textContent=`↻ Refresh ${PLATFORMS.instagram.label}`;
   updateLastUpdated();await persistRoster();await saveSnapshot(true);
+  renderRoster();
 }
 
 async function refreshSocialPlatform(platform){
